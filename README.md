@@ -32,6 +32,8 @@ sudo apt-get dist-upgrade -y
 sudo apt-get install -y sudo git zsh software-properties-common build-essential curl file python-setuptools ruby
 sudo rm -rf /var/lib/apt/lists/*
 
+sudo chsh -s /bin/zsh
+
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"
 
 test -d ~/.linuxbrew && PATH="$HOME/.linuxbrew/bin:$HOME/.linuxbrew/sbin:$PATH"
@@ -39,9 +41,9 @@ test -d /home/linuxbrew/.linuxbrew && PATH="/home/linuxbrew/.linuxbrew/bin:/home
 test -r ~/.bash_profile && echo "export PATH='$(brew --prefix)/bin:$(brew --prefix)/sbin'":'"$PATH"' >>~/.bash_profile
 echo "export PATH='$(brew --prefix)/bin:$(brew --prefix)/sbin'":'"$PATH"' >>~/.profile
 
-./dotfiles/setup.sh
-
 brew install peco tig rbenv nodebrew
+
+./dotfiles/setup.sh
 ```
 
 ## Thanks
