@@ -5,7 +5,7 @@ set vertical-split = no
 # 上下比率
 set split-view-height = 80%
 # タブサイズ
-set tab-size = 4
+set tab-size = 2
 # 空白無視
 set ignore-space = all
 # 折り返し
