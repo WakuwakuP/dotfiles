@@ -1,6 +1,6 @@
 FROM ubuntu:xenial
 
-ARG USERNAME=windyakin
+ARG USERNAME=wakuwakup
 
 RUN sed -i.bak -e "s%http://archive.ubuntu.com/ubuntu/%http://ftp.jaist.ac.jp/pub/Linux/ubuntu/%g" /etc/apt/sources.list
 
