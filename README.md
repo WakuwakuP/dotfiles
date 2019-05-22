@@ -1,8 +1,8 @@
-# dotfiles via windyakin
+# dotfiles
 
 ## いつもの
 
-windyakin の dotfiles です。
+windyakin さんの dotfiles を自分用に改変しました．
 
 ## Quick Start!
 
@@ -24,6 +24,6 @@ $ docker run -it --rm windyakin/dotfiles
 $ brew install peco tig rbenv nodebrew
 ```
 
-## Author
+## Thanks
 
 * windyakin ([@MITLicense](https://twitter.com/MITLicense))
