@@ -65,6 +65,7 @@ function command_install_check() {
 make_symbolic_link $HOME/.zshrc $WORKDIR/.zshrc
 make_symbolic_link $HOME/.gitconfig $WORKDIR/.gitconfig
 make_symbolic_link $HOME/.tigrc $WORKDIR/.tigrc
+make_symbolic_link $HOME/.tmux.conf $WORKDIR/.tmux.conf
 
 mkdir -p $HOME/.peco
 make_symbolic_link $HOME/.peco/config.json $WORKDIR/peco/config.json
