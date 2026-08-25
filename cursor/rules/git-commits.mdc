@@ -1,0 +1,17 @@
+---
+description: git commit は依頼されたときだけ、安全な手順で行う
+alwaysApply: true
+---
+
+# Git commits
+
+- ユーザが明示したときだけ commit する。不明なら先に確認する。
+- `git config` は変更しない。
+- `--force` / hard reset / hook 無効化は、ユーザが明示しない限り使わない。
+- `main` / `master` への force push は、依頼されても先に警告する。
+- `--amend` は「今回の会話で作った未 push の HEAD」など条件が揃ったときだけ。
+- hook で reject された commit は amend せず、直して新しい commit を作る。
+- 秘密情報（`.env`、credentials）は staged に入れない。
+- commit message は HEREDOC で渡し、why を 1〜2 文で書く。
+- 対話が必要な `git -i` は使わない。
+- push は明示依頼があるときだけ。

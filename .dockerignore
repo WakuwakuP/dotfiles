@@ -1,0 +1,5 @@
+.git
+**/.git
+sandbox/tmp
+*.swp
+.DS_Store

@@ -1,0 +1,19 @@
+[ghq]
+	root = /src
+[user]
+	email = naoki.fujisawa@wakuwakup.net
+	name = WakuwakuP
+	signingkey = 339BA29AD11FE29A4E5AD8B6D6077D4B10C57FA3
+[push]
+	default = current
+[commit]
+	gpgsign = true
+[url "git@github.com:"]
+	pushInsteadOf = https://github.com/
+	pushInsteadOf = git@github.com:
+[credential "https://github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential

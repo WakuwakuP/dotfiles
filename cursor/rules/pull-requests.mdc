@@ -1,0 +1,13 @@
+---
+description: GitHub 操作は gh を使い、PR は要約とテスト計画を付けて作る
+alwaysApply: true
+---
+
+# Pull requests
+
+- GitHub 操作は `gh` を使う。
+- PR 作成前に `status` / `diff` / 追跡状況 / `log` / base との diff を並列で確認する。
+- 含める全 commit を見て要約する。最新 commit だけ見ない。
+- `gh pr create` の body は HEREDOC で渡し、Summary と Test plan を含める。
+- 必要なら先に `git push -u origin HEAD` する。
+- `git config` は変更しない。

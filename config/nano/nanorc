@@ -1,0 +1,6 @@
+set autoindent
+set backup
+set backupdir "/tmp"
+set softwrap
+set suspend
+set linenumbers

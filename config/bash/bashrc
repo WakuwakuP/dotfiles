@@ -1,0 +1,17 @@
+# ~/.bashrc — interactive bash
+# Modules live in config/bash/lib and are sourced in filename order.
+
+case $- in
+  *i*) ;;
+  *) return ;;
+esac
+
+_dotfiles_bash_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+DOTFILES="$(cd "${_dotfiles_bash_dir}/../.." && pwd)"
+unset _dotfiles_bash_dir
+
+for _dotfiles_mod in "${DOTFILES}/config/bash/lib/"*.sh; do
+  # shellcheck source=/dev/null
+  [[ -r "${_dotfiles_mod}" ]] && . "${_dotfiles_mod}"
+done
+unset _dotfiles_mod
