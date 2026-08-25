@@ -8,6 +8,13 @@ if [[ -z ${TMUX:-} ]]; then
   fi
 fi
 
+if [[ -d "${HOME}/.local/bin" ]]; then
+  case ":$PATH:" in
+    *":${HOME}/.local/bin:"*) ;;
+    *) PATH="${HOME}/.local/bin:$PATH" ;;
+  esac
+fi
+
 export GOPATH="${GOPATH:-$HOME/go}"
 export GOBIN="${GOBIN:-$GOPATH/bin}"
 export PATH="$PATH:$GOBIN"

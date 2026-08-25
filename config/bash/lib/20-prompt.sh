@@ -1,4 +1,4 @@
-# Colored prompt. Powerline (80-powerline.sh) replaces this when installed.
+# Colored prompt. Starship (80-starship.sh) replaces this when installed.
 
 case "$TERM" in
   xterm-color|*-256color) color_prompt=yes ;;

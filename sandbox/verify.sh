@@ -40,15 +40,17 @@ check "profile linked" is_link_to "$HOME/.profile" "/config/bash/profile"
 check "gitconfig linked" is_link_to "$HOME/.gitconfig" "/config/git/gitconfig"
 check "tmux.conf linked" is_link_to "$HOME/.tmux.conf" "/config/tmux/tmux.conf"
 check "nanorc linked" is_link_to "$HOME/.nanorc" "/config/nano/nanorc"
-check "peco linked" is_link_to "$HOME/.peco" "/config/peco"
 check "gh config linked" is_link_to "$HOME/.config/gh/config.yml" "/config/gh/config.yml"
+check "starship.toml linked" is_link_to "$HOME/.config/starship.toml" "/config/starship/starship.toml"
 check "cursor rule linked" is_link_to "$HOME/.cursor/rules/respond-in-japanese.mdc" "/cursor/rules/respond-in-japanese.mdc"
 
 check "tmux installed" command -v tmux
-check "peco installed" command -v peco
+check "fzf installed" command -v fzf
+has_bat() { command -v bat >/dev/null 2>&1 || command -v batcat >/dev/null 2>&1; }
+check "bat installed" has_bat
 check "gh installed" command -v gh
 check "ghq installed" command -v ghq
-check "powerline-shell installed" command -v powerline-shell
+check "starship installed" command -v starship
 check "ghq root /src exists" test -d /src
 check "tpm cloned" test -d "$HOME/.tmux/plugins/tpm/.git"
 check "tmux-sensible cloned" test -d "$HOME/.tmux/plugins/tmux-sensible"
@@ -63,10 +65,13 @@ eval_in_bash() {
   SSH_CONNECTION="sandbox 0 0 0" bash -ic "$1"
 }
 
-check "peco-ghql defined" eval_in_bash "type peco-ghql >/dev/null"
-check "peco-history defined" eval_in_bash "type peco-history >/dev/null"
+check "g defined" eval_in_bash "type g >/dev/null"
+check "fzf-ghql defined" eval_in_bash "type fzf-ghql >/dev/null"
+check "fzf-history defined" eval_in_bash "type fzf-history >/dev/null"
+check "FZF_DEFAULT_OPTS reverse" eval_in_bash '[[ "$FZF_DEFAULT_OPTS" == *--layout=reverse* ]]'
 check "alias ll defined" eval_in_bash "alias ll >/dev/null"
 check "DOTFILES exported" eval_in_bash "[[ -n \"\$DOTFILES\" && -d \"\$DOTFILES/config/bash/lib\" ]]"
+check "starship initialized" eval_in_bash '[[ "$STARSHIP_SHELL" == bash ]]'
 
 if eval_in_bash '[[ "$(type -t ssh)" == alias ]]'; then
   bad "ssh is aliased outside tmux (should only wrap inside tmux)"

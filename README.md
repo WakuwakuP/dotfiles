@@ -9,7 +9,7 @@
 - bash（モジュール分割）
 - tmux（prefix `C-t`、Vim キー、win32yank、tpm）
 - git（身元・GPG 署名・gh credential・ghq root `/src`）
-- peco / nano / gh CLI 設定
+- fzf（PowerShell の `g` と同等の ghq プレビュー） / starship / nano / gh CLI 設定
 - Cursor ユーザールールとプラグイン一覧
 
 ## 入れていないもの
@@ -35,11 +35,11 @@ curl -fsSL https://raw.githubusercontent.com/WakuwakuP/dotfiles/master/install.s
 `setup.sh` は次を順に確認する。
 
 1. 設定ファイルのシンボリックリンク（既存は `~/.dotfiles-backup-*` に退避）
-2. apt パッケージ（`tmux peco gh git gpg`）
+2. apt パッケージ（`tmux fzf bat gh git gpg`、あれば `lsd`）
 3. `ghq` と `/src`
 4. tmux plugin manager（tpm / tmux-sensible）
 5. WSL 用 `win32yank.exe`
-6. `powerline-shell`
+6. `starship`（`powerline-shell` の代替。プロンプトが速い）
 7. Cursor ルールを `~/.cursor/rules` へ
 
 ## レイアウト
@@ -49,9 +49,9 @@ config/bash/bashrc          # ~/.bashrc。lib/*.sh を順に読む
 config/bash/lib/            # 機能ごとの分割
 config/git/gitconfig
 config/tmux/tmux.conf
-config/peco/config.json
 config/nano/nanorc
 config/gh/config.yml
+config/starship/starship.toml
 cursor/rules/               # Cursor ユーザールール
 cursor/plugins.md           # 手動で入れるプラグイン
 setup.sh                    # 対話式セットアップ
@@ -67,16 +67,19 @@ bash を直すときは `config/bash/lib/` の該当ファイルだけ編集す�
 | `20-prompt.sh` | 通常プロンプト |
 | `30-aliases.sh` | ls / grep / ll |
 | `40-path.sh` | GOPATH、任意の brew / nvm |
-| `50-peco.sh` | peco 関数とキーバインド |
+| `50-fzf.sh` | fzf 関数とキーバインド（`g` / Ctrl-g など） |
 | `60-tmux.sh` | 自動 attach、ホスト色付き SSH |
 | `70-completions.sh` | bash-completion と速い ssh 補完 |
-| `80-powerline.sh` | powerline-shell があるときだけ有効 |
+| `80-starship.sh` | starship があるときだけ有効 |
 
-## peco キーバインド
+## fzf キーバインド
 
-| キー | 動作 |
+Windows PowerShell の `g` と同じく、`fzf --layout=reverse` を使う。ghq 選択時は README を `bat`（なければ `batcat`）で、無いときは `lsd`（なければ `ls`）でプレビューする。
+
+| キー / コマンド | 動作 |
 | --- | --- |
-| `Ctrl-g` | ghq リポジトリへ移動 |
+| `g` | ghq リポジトリへ移動（PowerShell の `g` と同等） |
+| `Ctrl-g` | 同上（現在の入力をクエリにする） |
 | `Ctrl-a` | `~/.ssh/config` から SSH |
 | `Ctrl-r` | 履歴検索 |
 | `Ctrl-l` | 直前コマンド出力を挿入 |

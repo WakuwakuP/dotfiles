@@ -21,11 +21,11 @@ Options:
 
 Steps (each can be skipped):
   1. Symlink config files (existing files are backed up)
-  2. Install apt packages: tmux peco gh git gpg
+  2. Install apt packages: tmux fzf bat gh git gpg
   3. Install ghq and ensure ghq root /src
   4. Install tmux plugin manager (tpm + tmux-sensible)
   5. Install win32yank.exe (WSL clipboard)
-  6. Install powerline-shell
+  6. Install starship (fast prompt; replaces powerline-shell)
   7. Copy Cursor user rules to ~/.cursor/rules
 EOF
 }
@@ -86,8 +86,17 @@ step_links() {
   link_file "$HOME/.gitconfig" "${DOTFILES}/config/git/gitconfig"
   link_file "$HOME/.tmux.conf" "${DOTFILES}/config/tmux/tmux.conf"
   link_file "$HOME/.nanorc" "${DOTFILES}/config/nano/nanorc"
-  link_file "$HOME/.peco" "${DOTFILES}/config/peco"
   link_file "$HOME/.config/gh/config.yml" "${DOTFILES}/config/gh/config.yml"
+  link_file "$HOME/.config/starship.toml" "${DOTFILES}/config/starship/starship.toml"
+
+  if [[ -L "$HOME/.peco" ]]; then
+    local peco_link
+    peco_link="$(readlink "$HOME/.peco" || true)"
+    if [[ "$peco_link" == "${DOTFILES}/config/peco" || "$peco_link" == *"/config/peco" ]]; then
+      rm "$HOME/.peco"
+      ok "removed leftover peco symlink"
+    fi
+  fi
 }
 
 ensure_universe() {
@@ -122,10 +131,15 @@ install_gh() {
 }
 
 step_packages() {
-  info "Install apt packages: tmux peco gh git gpg curl"
+  info "Install apt packages: tmux fzf bat gh git gpg curl"
   sudo apt-get update
   ensure_universe
-  sudo apt-get install -y tmux peco git gpg curl ca-certificates
+  sudo apt-get install -y tmux fzf bat git gpg curl ca-certificates
+  if apt-cache show lsd >/dev/null 2>&1; then
+    sudo apt-get install -y lsd
+  else
+    skip "lsd is not in apt; ghq preview will fall back to ls"
+  fi
   install_gh
   ok "apt packages installed"
 }
@@ -234,21 +248,23 @@ PY
   ok "installed $dest"
 }
 
-step_powerline() {
-  if command -v powerline-shell >/dev/null 2>&1; then
-    skip "powerline-shell already installed"
-    return 0
+step_starship() {
+  if command -v starship >/dev/null 2>&1; then
+    skip "starship already installed ($(command -v starship))"
+  else
+    mkdir -p "${HOME}/.local/bin"
+    info "Install starship to ~/.local/bin"
+    if curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b "${HOME}/.local/bin"; then
+      ok "starship installed to ~/.local/bin/starship"
+    else
+      fail "starship install failed"
+      return 1
+    fi
   fi
 
-  if ! command -v pip3 >/dev/null 2>&1; then
-    sudo apt-get install -y python3-pip
+  if command -v powerline-shell >/dev/null 2>&1; then
+    info "powerline-shell is unused now (slow Python prompt). Remove with: pip3 uninstall --break-system-packages powerline-shell"
   fi
-  if pip3 install --user --break-system-packages powerline-shell; then
-    ok "powerline-shell installed"
-    return 0
-  fi
-  fail "powerline-shell install failed"
-  return 1
 }
 
 step_cursor_rules() {
@@ -300,7 +316,7 @@ main() {
     skip "symlinks"
   fi
 
-  if ask_yes "2/7 Install apt packages (tmux peco gh git gpg)?" y; then
+  if ask_yes "2/7 Install apt packages (tmux fzf bat gh git gpg)?" y; then
     step_packages
   else
     skip "apt packages"
@@ -324,10 +340,10 @@ main() {
     skip "win32yank"
   fi
 
-  if ask_yes "6/7 Install powerline-shell?" y; then
-    step_powerline
+  if ask_yes "6/7 Install starship (replaces powerline-shell)?" y; then
+    step_starship
   else
-    skip "powerline-shell"
+    skip "starship"
   fi
 
   if ask_yes "7/7 Copy Cursor user rules to ~/.cursor/rules?" y; then

@@ -1,0 +1,97 @@
+# Fast powerline-style prompt. Replaces Python powerline-shell.
+# Keep modules few so each prompt stays cheap, especially on WSL.
+
+add_newline = false
+command_timeout = 150
+scan_timeout = 30
+
+format = """
+$custom\
+[$directory](bg:color_dir)\
+[](fg:color_dir bg:color_git)\
+[$git_branch$git_status](bg:color_git)\
+[](fg:color_git)\
+$cmd_duration """
+
+palette = "powerline"
+
+[palettes.powerline]
+color_dir = "#0087af"
+color_git = "#5f8700"
+color_ok = "green"
+color_err = "red"
+
+# Username background is the old `>` color: green on success, red on error.
+# STARSHIP_CMD_STATUS is exported from 80-starship.sh.
+[custom.user_ok]
+command = """
+printf '%s' "$USER"
+if [ -n "${SSH_CONNECTION:-}" ]; then
+  printf '@%s' "$HOSTNAME"
+fi
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  printf ' (%s)' "${VIRTUAL_ENV##*/}"
+fi
+"""
+when = '[ "${STARSHIP_CMD_STATUS:-0}" -eq 0 ]'
+shell = ["bash", "--noprofile", "--norc"]
+style = "bold fg:#e4e4e4 bg:color_ok"
+format = "[$output ]($style)[](fg:color_ok bg:color_dir)"
+disabled = false
+
+[custom.user_err]
+command = """
+printf '%s' "$USER"
+if [ -n "${SSH_CONNECTION:-}" ]; then
+  printf '@%s' "$HOSTNAME"
+fi
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  printf ' (%s)' "${VIRTUAL_ENV##*/}"
+fi
+"""
+when = '[ "${STARSHIP_CMD_STATUS:-0}" -ne 0 ]'
+shell = ["bash", "--noprofile", "--norc"]
+style = "bold fg:#e4e4e4 bg:color_err"
+format = "[$output ]($style)[](fg:color_err bg:color_dir)"
+disabled = false
+
+[directory]
+style = "bold fg:#e4e4e4 bg:color_dir"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncate_to_repo = true
+truncation_symbol = "…/"
+
+[git_branch]
+style = "fg:#e4e4e4 bg:color_git"
+format = "[ $branch]($style)"
+
+[git_status]
+style = "fg:#e4e4e4 bg:color_git"
+format = "[ $all_status$ahead_behind ]($style)"
+
+[cmd_duration]
+min_time = 2000
+format = " [⏱ $duration]($style)"
+style = "yellow"
+
+[character]
+disabled = true
+
+# Default starship probes these and they add latency for no benefit here.
+[aws]
+disabled = true
+[gcloud]
+disabled = true
+[azure]
+disabled = true
+[kubernetes]
+disabled = true
+[docker_context]
+disabled = true
+[package]
+disabled = true
+[git_metrics]
+disabled = true
+[git_commit]
+disabled = true
