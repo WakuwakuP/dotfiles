@@ -79,6 +79,33 @@ else
   pass "ssh is not aliased outside tmux"
 fi
 
+eval_in_tmux_bash() {
+  SSH_CONNECTION="sandbox 0 0 0" TMUX="dummy" bash -ic "$1"
+}
+
+if eval_in_tmux_bash '[[ "$(type -t ssh)" == alias ]]'; then
+  pass "ssh is aliased inside tmux"
+else
+  bad "ssh should be aliased inside tmux"
+fi
+
+fzf_ssh_via_alias="$(
+  SSH_CONNECTION="sandbox 0 0 0" TMUX="dummy" bash -ic '
+    mkdir -p "$HOME/.ssh"
+    printf "Host testhost\n" > "$HOME/.ssh/config"
+    fzf() { echo testhost; }
+    tmux_ssh() { printf "ALIAS:%s\n" "$1"; }
+    alias ssh=tmux_ssh
+    ssh() { printf "DIRECT:%s\n" "$1"; }
+    fzf-ssh
+  '
+)"
+if [[ "$fzf_ssh_via_alias" == *ALIAS:testhost* ]]; then
+  pass "fzf-ssh uses ssh alias inside tmux"
+else
+  bad "fzf-ssh uses ssh alias inside tmux"
+fi
+
 if command -v win32yank.exe >/dev/null 2>&1; then
   bad "win32yank.exe should be skipped on non-WSL Linux"
 else

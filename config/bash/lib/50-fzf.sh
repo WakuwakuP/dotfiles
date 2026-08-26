@@ -64,7 +64,8 @@ fzf-ssh() {
     }
   ' ~/.ssh/config | sort | fzf --query "${READLINE_LINE:-}") || return
   if [[ -n "$selected_host" ]]; then
-    ssh "${selected_host}"
+    # Functions skip aliases; honor `alias ssh=tmux_ssh` inside tmux.
+    eval "${BASH_ALIASES[ssh]:-command ssh} ${selected_host@Q}"
   fi
 }
 
