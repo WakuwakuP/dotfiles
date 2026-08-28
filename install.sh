@@ -6,11 +6,29 @@ set -euo pipefail
 REPO="${REPO:-https://github.com/WakuwakuP/dotfiles.git}"
 DOTPATH="${DOTPATH:-$HOME/.dotfiles}"
 
+run_setup() {
+  local setup="$1"
+  shift
+  local arg
+
+  for arg in "$@"; do
+    if [[ "$arg" == "-y" || "$arg" == "--yes" || "$arg" == "-h" || "$arg" == "--help" ]]; then
+      exec "$setup" "$@"
+    fi
+  done
+
+  if ! { : </dev/tty; } 2>/dev/null; then
+    echo "Interactive setup requires a terminal. Run again from a terminal or pass --yes." >&2
+    exit 1
+  fi
+  exec "$setup" "$@" </dev/tty
+}
+
 self="${BASH_SOURCE[0]:-}"
 if [[ -n "$self" && -f "$self" ]]; then
   here="$(cd "$(dirname "$(readlink -f "$self")")" && pwd)"
   if [[ -f "${here}/setup.sh" && -d "${here}/config" ]]; then
-    exec "${here}/setup.sh" "$@"
+    run_setup "${here}/setup.sh" "$@"
   fi
 fi
 
@@ -20,4 +38,4 @@ else
   git clone --recursive "${REPO}" "${DOTPATH}"
 fi
 
-exec "${DOTPATH}/setup.sh" "$@"
+run_setup "${DOTPATH}/setup.sh" "$@"

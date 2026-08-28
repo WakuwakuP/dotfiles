@@ -16,17 +16,18 @@ Usage: ./setup.sh [options]
 Restore WakuwakuP/dotfiles onto this machine.
 
 Options:
-  -y, --yes     Accept every prompt (non-interactive)
+  -y, --yes     Run steps 1-7 non-interactively; skip credentials
   -h, --help    Show this help
 
 Steps (each can be skipped):
   1. Symlink config files (existing files are backed up)
   2. Install apt packages: tmux fzf bat gh git gpg
-  3. Install ghq and ensure ghq root /src
+  3. Install ghq and configure its root directory
   4. Install tmux plugin manager (tpm + tmux-sensible)
   5. Install win32yank.exe (WSL clipboard)
   6. Install starship (fast prompt; replaces powerline-shell)
-  7. Copy Cursor user rules to ~/.cursor/rules
+  7. Symlink Cursor user rules to ~/.cursor/rules
+  8. Set up GitHub, SSH, and GPG credentials (interactive only)
 EOF
 }
 
@@ -144,7 +145,24 @@ step_packages() {
   ok "apt packages installed"
 }
 
+resolve_user_path() {
+  local path="$1"
+
+  case "$path" in
+    "~") path="$HOME" ;;
+    "~/"*) path="${HOME}/${path#\~/}" ;;
+    /*) ;;
+    *) path="${HOME}/${path}" ;;
+  esac
+
+  realpath -m -- "$path"
+}
+
 step_ghq() {
+  local config_file="${HOME}/.config/git/ghq.gitconfig"
+  local default_root="${HOME}/ghq"
+  local ghq_root
+
   if command -v ghq >/dev/null 2>&1; then
     skip "ghq already installed ($(command -v ghq))"
   elif command -v apt-get >/dev/null 2>&1 && apt-cache show ghq >/dev/null 2>&1; then
@@ -190,17 +208,28 @@ PY
     ok "ghq installed to ~/.local/bin/ghq"
   fi
 
-  if [[ -d /src ]]; then
-    skip "/src already exists"
-  else
-    if ask_yes "Create ghq root /src (needs sudo)?" y; then
-      sudo mkdir -p /src
-      sudo chown "${USER}:${USER}" /src
-      ok "created /src"
-    else
-      skip "left /src uncreated. gitconfig still has ghq.root=/src"
-    fi
+  if [[ -f "$config_file" ]]; then
+    default_root="$(git config --file "$config_file" --get ghq.root 2>/dev/null || printf '%s\n' "$default_root")"
   fi
+
+  ghq_root="$(ask_value "ghq root directory" "$default_root")"
+  ghq_root="$(resolve_user_path "$ghq_root")"
+
+  if [[ -e "$ghq_root" && ! -d "$ghq_root" ]]; then
+    fail "ghq root exists but is not a directory: ${ghq_root}"
+    return 1
+  elif [[ -d "$ghq_root" ]]; then
+    skip "${ghq_root} already exists"
+  elif ask_yes "Create ghq root ${ghq_root}?" y; then
+    mkdir -p "$ghq_root"
+    ok "created ${ghq_root}"
+  else
+    skip "left ${ghq_root} uncreated"
+  fi
+
+  mkdir -p "$(dirname "$config_file")"
+  git config --file "$config_file" --replace-all ghq.root "$ghq_root"
+  ok "configured ghq root: ${ghq_root}"
 }
 
 step_tpm() {
@@ -296,12 +325,12 @@ print_cursor_plugins() {
 print_secrets_note() {
   cat <<EOF
 
-${YELLOW}Not installed (secrets / machine-local):${RESET}
+${YELLOW}Machine-local credentials are not stored in this repository:${RESET}
   - SSH private keys and ~/.ssh/config hosts
   - GPG private key ${CYAN}339BA29AD11FE29A4E5AD8B6D6077D4B10C57FA3${RESET} (commits are signed)
-  - AWS / Azure credentials
-  - gh auth token (run: ${CYAN}gh auth login${RESET})
+  - gh authentication token
 
+Run the credential setup again with: ${CYAN}bash ${DOTFILES}/setup-secrets.sh${RESET}
 Reload the shell with: ${CYAN}exec bash -l${RESET}
 EOF
 }
@@ -310,46 +339,54 @@ main() {
   info "DOTFILES=${DOTFILES}"
   info "non-interactive=${ASSUME_YES}"
 
-  if ask_yes "1/7 Symlink config files?" y; then
+  if ask_yes "1/8 Symlink config files?" y; then
     step_links
   else
     skip "symlinks"
   fi
 
-  if ask_yes "2/7 Install apt packages (tmux fzf bat gh git gpg)?" y; then
+  if ask_yes "2/8 Install apt packages (tmux fzf bat gh git gpg)?" y; then
     step_packages
   else
     skip "apt packages"
   fi
 
-  if ask_yes "3/7 Install ghq and prepare /src?" y; then
+  if ask_yes "3/8 Install ghq and configure its root directory?" y; then
     step_ghq
   else
     skip "ghq"
   fi
 
-  if ask_yes "4/7 Install tmux plugins (tpm + tmux-sensible)?" y; then
+  if ask_yes "4/8 Install tmux plugins (tpm + tmux-sensible)?" y; then
     step_tpm
   else
     skip "tpm"
   fi
 
-  if ask_yes "5/7 Install win32yank.exe for WSL clipboard?" y; then
+  if ask_yes "5/8 Install win32yank.exe for WSL clipboard?" y; then
     step_win32yank
   else
     skip "win32yank"
   fi
 
-  if ask_yes "6/7 Install starship (replaces powerline-shell)?" y; then
+  if ask_yes "6/8 Install starship (replaces powerline-shell)?" y; then
     step_starship
   else
     skip "starship"
   fi
 
-  if ask_yes "7/7 Copy Cursor user rules to ~/.cursor/rules?" y; then
+  if ask_yes "7/8 Symlink Cursor user rules to ~/.cursor/rules?" y; then
     step_cursor_rules
   else
     skip "cursor rules"
+  fi
+
+  if [[ "$ASSUME_YES" == 1 ]]; then
+    skip "credential setup in non-interactive mode"
+  elif ask_yes "8/8 Set up GitHub, SSH, and GPG credentials?" n; then
+    bash "${DOTFILES}/setup-secrets.sh"
+  else
+    skip "credentials"
   fi
 
   print_cursor_plugins
@@ -357,4 +394,6 @@ main() {
   ok "setup finished"
 }
 
-main
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main
+fi

@@ -34,3 +34,22 @@ ask_yes() {
   reply="${reply:-$default}"
   [[ "$reply" =~ ^[Yy]$ ]]
 }
+
+ask_value() {
+  local prompt="$1"
+  local default="$2"
+  local reply
+
+  if [[ "${ASSUME_YES:-0}" == 1 ]]; then
+    printf '%s\n' "$default"
+    return 0
+  fi
+
+  if [[ -n "$default" ]]; then
+    printf '%s [%s] ' "$prompt" "$default" >&2
+  else
+    printf '%s: ' "$prompt" >&2
+  fi
+  read -r reply
+  printf '%s\n' "${reply:-$default}"
+}

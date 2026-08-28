@@ -24,6 +24,15 @@ echo "== setup =="
 ./setup.sh --yes
 
 echo
+echo "== configurable ghq root =="
+printf '%s\ny\n' '~/custom ghq' | bash -c 'source ./setup.sh; step_ghq'
+check "custom ghq.root" test "$(git config --global --includes --get ghq.root)" = "$HOME/custom ghq"
+check "custom ghq root exists" test -d "$HOME/custom ghq"
+
+bash -c 'source ./setup.sh; ASSUME_YES=1; step_ghq'
+check "ghq.root preserved" test "$(git config --global --includes --get ghq.root)" = "$HOME/custom ghq"
+
+echo
 echo "== verify =="
 
 is_link_to() {
@@ -51,14 +60,14 @@ check "bat installed" has_bat
 check "gh installed" command -v gh
 check "ghq installed" command -v ghq
 check "starship installed" command -v starship
-check "ghq root /src exists" test -d /src
+check "ghq root exists" test -d "$(ghq root)"
 check "tpm cloned" test -d "$HOME/.tmux/plugins/tpm/.git"
 check "tmux-sensible cloned" test -d "$HOME/.tmux/plugins/tmux-sensible"
 
 check "git user.name" test "$(git config --global user.name)" = WakuwakuP
 check "git user.email" test "$(git config --global user.email)" = naoki.fujisawa@wakuwakup.net
 check "git gpgsign" test "$(git config --global commit.gpgsign)" = true
-check "ghq.root" test "$(git config --global ghq.root)" = /src
+check "ghq.root configured" test -n "$(git config --global --includes --get ghq.root)"
 
 # Interactive bash without auto-creating a tmux session.
 eval_in_bash() {
