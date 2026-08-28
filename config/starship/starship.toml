@@ -1,19 +1,39 @@
-# Fast powerline-style prompt. Replaces Python powerline-shell.
-# Keep modules few so each prompt stays cheap, especially on WSL.
+"$schema" = "https://starship.rs/config-schema.json"
 
 add_newline = false
 command_timeout = 150
 scan_timeout = 30
 
-format = """
-$custom\
-[$directory](bg:color_dir)\
-[](fg:color_dir bg:color_git)\
-[$git_branch$git_status](bg:color_git)\
-[](fg:color_git)\
-$cmd_duration """
-
 palette = "powerline"
+
+format = """
+${custom.user_ok}\
+${custom.user_err}\
+$directory\
+[](fg:color_dir bg:color_git)\
+$git_branch\
+$git_status\
+[](fg:color_git bg:#86BBD8)\
+$c\
+$elixir\
+$elm\
+$golang\
+$gradle\
+$haskell\
+$java\
+$julia\
+$maven\
+$nodejs\
+$bun\
+$nim\
+$rust\
+$scala\
+[](fg:#86BBD8 bg:#06969A)\
+$docker_context\
+[](fg:#06969A)\
+$cmd_duration\
+$line_break\
+$character"""
 
 [palettes.powerline]
 color_dir = "#0087af"
@@ -21,8 +41,6 @@ color_git = "#5f8700"
 color_ok = "green"
 color_err = "red"
 
-# Username background is the old `>` color: green on success, red on error.
-# STARSHIP_CMD_STATUS is exported from 80-starship.sh.
 [custom.user_ok]
 command = """
 printf '%s' "$USER"
@@ -33,10 +51,10 @@ if [ -n "${VIRTUAL_ENV:-}" ]; then
   printf ' (%s)' "${VIRTUAL_ENV##*/}"
 fi
 """
-when = '[ "${STARSHIP_CMD_STATUS:-0}" -eq 0 ]'
+when = """[ "${STARSHIP_CMD_STATUS:-0}" -eq 0 ]"""
 shell = ["bash", "--noprofile", "--norc"]
 style = "bold fg:#e4e4e4 bg:color_ok"
-format = "[$output ]($style)[](fg:color_ok bg:color_dir)"
+format = "[](fg:color_ok)[$output ]($style)[](fg:color_ok bg:color_dir)"
 disabled = false
 
 [custom.user_err]
@@ -49,49 +67,117 @@ if [ -n "${VIRTUAL_ENV:-}" ]; then
   printf ' (%s)' "${VIRTUAL_ENV##*/}"
 fi
 """
-when = '[ "${STARSHIP_CMD_STATUS:-0}" -ne 0 ]'
+when = """[ "${STARSHIP_CMD_STATUS:-0}" -ne 0 ]"""
 shell = ["bash", "--noprofile", "--norc"]
 style = "bold fg:#e4e4e4 bg:color_err"
-format = "[$output ]($style)[](fg:color_err bg:color_dir)"
+format = "[](fg:color_err)[$output ]($style)[](fg:color_err bg:color_dir)"
 disabled = false
 
 [directory]
 style = "bold fg:#e4e4e4 bg:color_dir"
 format = "[ $path ]($style)"
 truncation_length = 3
-truncate_to_repo = true
 truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = " "
+"Pictures" = " "
+
+[c]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[cpp]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[docker_context]
+symbol = " "
+style = "bg:#06969A"
+format = "[ $symbol $context ]($style)"
+
+[elixir]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[elm]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
 
 [git_branch]
 style = "fg:#e4e4e4 bg:color_git"
-format = "[ $branch]($style)"
+format = "[ $branch ]($style)"
 
 [git_status]
 style = "fg:#e4e4e4 bg:color_git"
-format = "[ $all_status$ahead_behind ]($style)"
+format = "[$all_status$ahead_behind ]($style)"
+
+[golang]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[gradle]
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[haskell]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[java]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[julia]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[maven]
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[nodejs]
+symbol = ""
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[bun]
+symbol = ""
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[nim]
+symbol = "󰆥 "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[rust]
+symbol = ""
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
+
+[scala]
+symbol = " "
+style = "bg:#86BBD8"
+format = "[ $symbol ($version) ]($style)"
 
 [cmd_duration]
 min_time = 2000
-format = " [⏱ $duration]($style)"
 style = "yellow"
+format = " [⏱ $duration]($style)"
+
+[line_break]
+disabled = false
 
 [character]
-disabled = true
-
-# Default starship probes these and they add latency for no benefit here.
-[aws]
-disabled = true
-[gcloud]
-disabled = true
-[azure]
-disabled = true
-[kubernetes]
-disabled = true
-[docker_context]
-disabled = true
-[package]
-disabled = true
-[git_metrics]
-disabled = true
-[git_commit]
-disabled = true
+disabled = false
