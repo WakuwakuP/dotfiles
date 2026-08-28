@@ -2,5 +2,5 @@ set autoindent
 set backup
 set backupdir "/tmp"
 set softwrap
-set suspend
+bind ^Z suspend main
 set linenumbers
