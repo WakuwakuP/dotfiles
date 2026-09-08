@@ -10,10 +10,10 @@
 	pushInsteadOf = https://github.com/
 	pushInsteadOf = git@github.com:
 [credential "https://github.com"]
-	helper =
+	helper = 
 	helper = !/usr/bin/gh auth git-credential
 [credential "https://gist.github.com"]
-	helper =
+	helper = 
 	helper = !/usr/bin/gh auth git-credential
 [include]
 	path = ~/.config/git/ghq.gitconfig

@@ -15,3 +15,7 @@ for _dotfiles_mod in "${DOTFILES}/config/bash/lib/"*.sh; do
   [[ -r "${_dotfiles_mod}" ]] && . "${_dotfiles_mod}"
 done
 unset _dotfiles_mod
+
+export NVM_DIR="$HOME/.config/nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion

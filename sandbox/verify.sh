@@ -81,6 +81,7 @@ check "FZF_DEFAULT_OPTS reverse" eval_in_bash '[[ "$FZF_DEFAULT_OPTS" == *--layo
 check "alias ll defined" eval_in_bash "alias ll >/dev/null"
 check "DOTFILES exported" eval_in_bash "[[ -n \"\$DOTFILES\" && -d \"\$DOTFILES/config/bash/lib\" ]]"
 check "starship initialized" eval_in_bash '[[ "$STARSHIP_SHELL" == bash ]]'
+check "SSH completion regression checks" bash "$ROOT/sandbox/verify-ssh-completion.sh"
 
 if eval_in_bash '[[ "$(type -t ssh)" == alias ]]'; then
   bad "ssh is aliased outside tmux (should only wrap inside tmux)"

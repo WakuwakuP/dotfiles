@@ -11,7 +11,7 @@ if ! shopt -oq posix; then
 fi
 
 # Avoid slow `compgen -c` from bash-completion's ssh remote-command completion.
-if [ -r /usr/share/bash-completion/completions/ssh ]; then
+if declare -F _init_completion >/dev/null && [ -r /usr/share/bash-completion/completions/ssh ]; then
   # shellcheck source=/dev/null
   . /usr/share/bash-completion/completions/ssh
 fi
@@ -27,7 +27,15 @@ _ssh_no_slow_remote_command_completion() {
     return 0
   fi
 
-  _ssh "$@"
+  # bash-completion 2.12+ uses namespaced completion functions.
+  if declare -F _comp_cmd_ssh >/dev/null; then
+    _comp_cmd_ssh "$@"
+  elif declare -F _ssh >/dev/null; then
+    _ssh "$@"
+  fi
 }
 
-complete -F _ssh_no_slow_remote_command_completion ssh
+if declare -F _init_completion >/dev/null && declare -F _count_args >/dev/null \
+  && { declare -F _comp_cmd_ssh >/dev/null || declare -F _ssh >/dev/null; }; then
+  complete -F _ssh_no_slow_remote_command_completion ssh
+fi
