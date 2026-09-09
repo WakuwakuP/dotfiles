@@ -5,6 +5,13 @@ t() {
 }
 
 tmux_automatically_attach_session() {
+  # Auto-attach only in login shells (Windows Terminal / SSH entry points).
+  # IDE-spawned terminals (Zed agent, VS Code tasks) are non-login shells and
+  # would hang on the attach prompt / new-session, so skip them.
+  shopt -q login_shell || return 0
+  case "${TERM_PROGRAM:-}" in zed | vscode) return 0 ;; esac
+  [[ -n "${ZED_TERM:-}" || -n "${VSCODE_INJECTION:-}" || -n "${NO_TMUX:-}" ]] && return 0
+
   if is_screen_or_tmux_running; then
     ! is_exists tmux && return 1
 
