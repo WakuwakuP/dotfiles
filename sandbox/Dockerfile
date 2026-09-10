@@ -9,6 +9,7 @@ RUN apt-get update \
     sudo \
     ca-certificates \
     curl \
+    jq \
     git \
     locales \
     python3 \

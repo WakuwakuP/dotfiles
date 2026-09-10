@@ -5,6 +5,8 @@ set -euo pipefail
 DOTFILES="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=lib/ui.sh
 . "${DOTFILES}/lib/ui.sh"
+# shellcheck source=lib/reboot-notify.sh
+. "${DOTFILES}/lib/reboot-notify.sh"
 
 ASSUME_YES=0
 BACKUP_DIR="${BACKUP_DIR:-$HOME/.dotfiles-backup-$(date +%Y%m%d%H%M%S)}"
@@ -16,7 +18,7 @@ Usage: ./setup.sh [options]
 Restore WakuwakuP/dotfiles onto this machine.
 
 Options:
-  -y, --yes     Run steps 1-7 non-interactively; skip credentials
+  -y, --yes     Run steps 1-7 non-interactively; skip credentials and notifications
   -h, --help    Show this help
 
 Steps (each can be skipped):
@@ -28,6 +30,7 @@ Steps (each can be skipped):
   6. Install starship (fast prompt; replaces powerline-shell)
   7. Symlink Cursor user rules to ~/.cursor/rules
   8. Set up GitHub, SSH, and GPG credentials (interactive only)
+  9. Set up Discord reboot notifications and daily cron (interactive only)
 EOF
 }
 
@@ -339,43 +342,43 @@ main() {
   info "DOTFILES=${DOTFILES}"
   info "non-interactive=${ASSUME_YES}"
 
-  if ask_yes "1/8 Symlink config files?" y; then
+  if ask_yes "1/9 Symlink config files?" y; then
     step_links
   else
     skip "symlinks"
   fi
 
-  if ask_yes "2/8 Install apt packages (tmux fzf bat gh git gpg)?" y; then
+  if ask_yes "2/9 Install apt packages (tmux fzf bat gh git gpg)?" y; then
     step_packages
   else
     skip "apt packages"
   fi
 
-  if ask_yes "3/8 Install ghq and configure its root directory?" y; then
+  if ask_yes "3/9 Install ghq and configure its root directory?" y; then
     step_ghq
   else
     skip "ghq"
   fi
 
-  if ask_yes "4/8 Install tmux plugins (tpm + tmux-sensible)?" y; then
+  if ask_yes "4/9 Install tmux plugins (tpm + tmux-sensible)?" y; then
     step_tpm
   else
     skip "tpm"
   fi
 
-  if ask_yes "5/8 Install win32yank.exe for WSL clipboard?" y; then
+  if ask_yes "5/9 Install win32yank.exe for WSL clipboard?" y; then
     step_win32yank
   else
     skip "win32yank"
   fi
 
-  if ask_yes "6/8 Install starship (replaces powerline-shell)?" y; then
+  if ask_yes "6/9 Install starship (replaces powerline-shell)?" y; then
     step_starship
   else
     skip "starship"
   fi
 
-  if ask_yes "7/8 Symlink Cursor user rules to ~/.cursor/rules?" y; then
+  if ask_yes "7/9 Symlink Cursor user rules to ~/.cursor/rules?" y; then
     step_cursor_rules
   else
     skip "cursor rules"
@@ -383,10 +386,18 @@ main() {
 
   if [[ "$ASSUME_YES" == 1 ]]; then
     skip "credential setup in non-interactive mode"
-  elif ask_yes "8/8 Set up GitHub, SSH, and GPG credentials?" n; then
+  elif ask_yes "8/9 Set up GitHub, SSH, and GPG credentials?" n; then
     bash "${DOTFILES}/setup-secrets.sh"
   else
     skip "credentials"
+  fi
+
+  if [[ "$ASSUME_YES" == 1 ]]; then
+    skip "reboot notifications in non-interactive mode"
+  elif ask_yes "9/9 Set up Discord reboot notifications?" n; then
+    step_reboot_notify
+  else
+    skip "reboot notifications"
   fi
 
   print_cursor_plugins

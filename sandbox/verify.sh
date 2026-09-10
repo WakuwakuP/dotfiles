@@ -82,6 +82,8 @@ check "alias ll defined" eval_in_bash "alias ll >/dev/null"
 check "DOTFILES exported" eval_in_bash "[[ -n \"\$DOTFILES\" && -d \"\$DOTFILES/config/bash/lib\" ]]"
 check "starship initialized" eval_in_bash '[[ "$STARSHIP_SHELL" == bash ]]'
 check "SSH completion regression checks" bash "$ROOT/sandbox/verify-ssh-completion.sh"
+check "reboot notification regression checks" bash "$ROOT/sandbox/verify-reboot-notify.sh"
+check "reboot setup regression checks" bash "$ROOT/sandbox/verify-reboot-setup.sh"
 
 if eval_in_bash '[[ "$(type -t ssh)" == alias ]]'; then
   bad "ssh is aliased outside tmux (should only wrap inside tmux)"
