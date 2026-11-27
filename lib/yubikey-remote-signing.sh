@@ -10,8 +10,10 @@ cd "$repo"
 git_dir=$(git rev-parse --git-common-dir)
 
 keys=$(ssh-add -L) || { echo 'No forwarded agent key. Check server agent-forwarding permissions.' >&2; exit 1; }
-actual=$(printf '%s\n' "$keys" | awk '{print $1, $2}')
-[ "$actual" = "$expected" ] || { echo 'Forwarded key does not match the selected YubiKey.' >&2; exit 1; }
+printf '%s\n' "$keys" | awk -v expected="$expected" '
+  $1 " " $2 == expected { found = 1 }
+  END { exit !found }
+' || { echo 'Forwarded key does not match the selected YubiKey.' >&2; exit 1; }
 
 # One include makes all three settings effective together; reruns replace the public key.
 umask 077

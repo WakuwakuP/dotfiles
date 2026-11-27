@@ -68,6 +68,13 @@ other=$(ssh -G -F "$tmp/client.conf" other)
 ! grep -Fq 'yubikey/active/identity' <<< "$other" || exit 1
 yk doctor
 
+if yk forward --off --repo app test-box >"$tmp/combo.out" 2>"$tmp/combo.err"; then
+  echo 'forward --off --repo should fail' >&2
+  exit 1
+fi
+grep -F 'cannot be combined' "$tmp/combo.err"
+if grep -F 'unbound variable' "$tmp/combo.err"; then exit 1; fi
+
 # Pre-start a test agent with a bounded lifetime (ssh-agent exits with its child).
 ssh-agent -P "$SSH_SK_PROVIDER" -a "$state/nano/agent.sock" bash -eu -c '
   root=$1 state=$2 tmp=$3
@@ -92,6 +99,14 @@ ssh-agent -P "$SSH_SK_PROVIDER" -a "$state/nano/agent.sock" bash -eu -c '
   export repo="$tmp/remote" expected
   sh "$root/lib/yubikey-remote-signing.sh"
   sh "$root/lib/yubikey-remote-signing.sh"
+  ssh-keygen -q -t ed25519 -N "" -f "$tmp/extra" -C extra
+  ssh-add "$tmp/extra"
+  sh "$root/lib/yubikey-remote-signing.sh"
+  ssh-add -d "$tmp/extra.pub"
+  saved=$expected
+  expected="sk-ssh-ed25519@openssh.com AAAA"
+  if sh "$root/lib/yubikey-remote-signing.sh"; then exit 1; fi
+  expected=$saved
   [[ $(git -C "$repo" config --local --get-all include.path | wc -l) == 1 ]]
   git -C "$repo" commit -qm forwarded --allow-empty
   git -C "$repo" verify-commit HEAD
@@ -118,6 +133,12 @@ PATH="$tmp/bin:$PATH" yk host --install tester@test-box
 PATH="$tmp/bin:$PATH" yk host --install tester@test-box
 [[ $(grep -c 'sk-ssh-ed25519' "$REMOTE_HOME/.ssh/authorized_keys") == 2 ]]
 grep -q '^restrict sk-ssh-ed25519' "$REMOTE_HOME/.ssh/authorized_keys"
+grep -Eq '^restrict sk-ssh-ed25519@openssh.com .+ yubikey-nano$' "$REMOTE_HOME/.ssh/authorized_keys"
+empty=$tmp/empty-home
+mkdir -p "$empty/.ssh"
+HOME="$empty" sh "$root/lib/yubikey-authorize.sh" nano "$(awk 'NR==1 {print $2}' "$state/nano/identity.pub")"
+grep -Eq '^sk-ssh-ed25519@openssh.com .+ yubikey-nano$' "$empty/.ssh/authorized_keys"
+if grep -q '^restrict ' "$empty/.ssh/authorized_keys"; then exit 1; fi
 
 # Simulate only resident-key enumeration. Signatures, handles and Git are real.
 export RECOVERY="$tmp/recovery"
