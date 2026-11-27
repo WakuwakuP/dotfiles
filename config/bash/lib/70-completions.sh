@@ -39,3 +39,30 @@ if declare -F _init_completion >/dev/null && declare -F _count_args >/dev/null \
   && { declare -F _comp_cmd_ssh >/dev/null || declare -F _ssh >/dev/null; }; then
   complete -F _ssh_no_slow_remote_command_completion ssh
 fi
+
+_yubikey_ssh_completion() {
+  local cur prev words cword choices
+  _init_completion -n : || return
+  case "$cword:${words[1]-}:${words[2]-}" in
+    1:*) choices='setup use host forward doctor' ;;
+    2:use:*|2:setup:*) choices='nano nfc' ;;
+    3:setup:nano|3:setup:nfc) choices='create import' ;;
+    2:forward:-*) choices='--on --off --list --repo' ;;
+    2:host:-*) choices='--install' ;;
+    2:forward:*|2:host:*|2:doctor:*|3:forward:--on|3:forward:--off|3:host:--install|4:forward:--repo)
+      # Use the same alias and known-host sources as ssh on both bash-completion APIs.
+      if declare -F _comp_compgen_known_hosts >/dev/null; then
+        _comp_compgen_known_hosts -a -- "$cur"
+      else
+        _known_hosts_real -a -- "$cur"
+      fi
+      return ;;
+    *) return 0 ;;
+  esac
+  mapfile -t COMPREPLY < <(compgen -W "$choices" -- "$cur")
+}
+
+if declare -F _init_completion >/dev/null \
+  && { declare -F _comp_compgen_known_hosts >/dev/null || declare -F _known_hosts_real >/dev/null; }; then
+  complete -F _yubikey_ssh_completion yubikey-ssh
+fi

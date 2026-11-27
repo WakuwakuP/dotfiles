@@ -12,6 +12,7 @@ RUN apt-get update \
     jq \
     git \
     locales \
+    openssh-tests \
     python3 \
   && rm -rf /var/lib/apt/lists/* \
   && useradd -m -s /bin/bash -G sudo waku \

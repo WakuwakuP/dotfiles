@@ -53,7 +53,14 @@ fzf-ghql() {
 
 fzf-ssh() {
   local selected_host
+  local -a configs=("$HOME/.ssh/config")
   [[ -r "${HOME}/.ssh/config" ]] || return 1
+  if [[ -r "$HOME/.ssh/yubikey/hosts.conf" ]]; then
+    configs+=("$HOME/.ssh/yubikey/hosts.conf")
+  fi
+  if [[ -r "$HOME/.ssh/yubikey/forward.conf" ]]; then
+    configs+=("$HOME/.ssh/yubikey/forward.conf")
+  fi
   selected_host=$(awk '
     tolower($1)=="host" {
       for (i=2; i<=NF; i++) {
@@ -62,7 +69,7 @@ fzf-ssh() {
         }
       }
     }
-  ' ~/.ssh/config | sort | fzf --query "${READLINE_LINE:-}") || return
+  ' "${configs[@]}" | sort -u | fzf --query "${READLINE_LINE:-}") || return
   if [[ -n "$selected_host" ]]; then
     # Functions skip aliases; honor `alias ssh=tmux_ssh` inside tmux.
     eval "${BASH_ALIASES[ssh]:-command ssh} ${selected_host@Q}"

@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+root=$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")
+. "$root/config/bash/lib/45-yubikey.sh"
+. "$root/lib/git-signing.sh"
+state="$HOME/.ssh/yubikey"
+include='Include ~/.ssh/yubikey/hosts.conf ~/.ssh/yubikey/forward.conf'
+
+usage() {
+  cat <<'EOF'
+yubikey-ssh setup [nano|nfc] [create|import]   Prepare a key and select it
+yubikey-ssh use nano|nfc                      Switch both SSH and Git signing
+yubikey-ssh host [--install] [USER@]HOST      Enable SSH; --install also registers prepared public keys
+yubikey-ssh forward --on [USER@]HOST           Auto-start forwarding and set up account-wide Git signing
+yubikey-ssh forward --off HOST                Disable forwarding on future connections
+yubikey-ssh forward --list                    List hosts and their forwarding settings
+yubikey-ssh forward [--repo DIR] [USER@]HOST   Forward only, or configure one remote repository
+yubikey-ssh doctor [HOST]                     Show active key and SSH settings
+EOF
+}
+
+die() { printf '%s\n' "$*" >&2; exit 1; }
+valid_role() { [[ $1 == nano || $1 == nfc ]] || die "Choose nano or nfc."; }
+valid_host() {
+  [[ $1 =~ ^[a-zA-Z0-9_:][a-zA-Z0-9.:%_-]*$ ]] || die "Enter one hostname or SSH alias."
+}
+active_role() { readlink "$state/active" || printf 'none\n'; }
+
+split_destination() {
+  destination=$1
+  host=${destination##*@}
+  valid_host "$host"
+  if [[ $destination != "$host" && ! ${destination%@*} =~ ^[a-zA-Z0-9_][a-zA-Z0-9._-]*$ ]]; then
+    die "Invalid SSH user in $destination"
+  fi
+}
+
+check_pair() {
+  local key=$1
+  [[ -s "$key" && -s "$key.pub" ]] || die "Missing handle or public key: $key"
+  [[ $(awk 'NR==1 {print $1}' "$key.pub") == sk-ssh-ed25519@openssh.com ]] ||
+    die "Expected an ed25519-sk public key: $key.pub"
+}
+
+prepare_profile() {
+  local role=$1 mode=$2 legacy="$HOME/.ssh/id_ed25519_sk_$1" key file
+  local -a matches=()
+  if [[ -d "$state/$role" ]]; then
+    check_pair "$state/$role/identity"
+    return
+  fi
+  mkdir "$stage/profile"
+  key="$stage/profile/identity"
+  if [[ -e "$legacy" || -e "$legacy.pub" ]]; then
+    check_pair "$legacy"
+    ln -s "../../id_ed25519_sk_$role" "$key"
+    ln -s "../../id_ed25519_sk_$role.pub" "$key.pub"
+    # Relative links resolve from the final profile directory.
+    file=$legacy
+  else
+    if [[ -z $mode ]]; then
+      printf 'Existing resident credential: import. New YubiKey: create. [import] ' >&2
+      read -r mode
+      mode=${mode:-import}
+    fi
+    printf 'Insert the %s YubiKey. Follow the PIN and touch prompts.\n' "$role" >&2
+    case "$mode" in
+      create)
+        ssh-keygen -t ed25519-sk -O resident -O "application=ssh:$role" \
+          -C "yubikey-$role" -N '' -f "$key"
+        ;;
+      import)
+        mkdir "$stage/recovered"
+        (cd "$stage/recovered" && ssh-keygen -K) ||
+          die "Recovery failed. On WSL with the Windows helper, start Windows Terminal as administrator and retry as your usual Linux user."
+        for file in "$stage/recovered/id_ed25519_sk_rk_$role" "$stage/recovered/id_ed25519_sk_rk_${role}_"*; do
+          [[ -f "$file" && -f "$file.pub" ]] && matches+=("$file")
+        done
+        [[ ${#matches[@]} == 1 ]] || die "Expected one resident ssh:$role key, found ${#matches[@]}. Check the token and application."
+        mv -- "${matches[0]}" "$key"
+        mv -- "${matches[0]}.pub" "$key.pub"
+        ;;
+      *) die "Choose create or import." ;;
+    esac
+    chmod 600 "$key"
+    file=$key
+  fi
+  check_pair "$file"
+  local derived public
+  derived=$(ssh-keygen -y -f "$file")
+  read -r -a public < "$file.pub"
+  [[ "$derived " == "${public[0]} ${public[1]} "* ]] || die "Handle and public key differ: $file"
+  mv -T -- "$stage/profile" "$state/$role"
+}
+
+select_profile() {
+  local role=$1
+  check_pair "$state/$role/identity"
+  [[ ! -e "$state/active" || -L "$state/active" ]] || die "Expected a symlink at $state/active"
+  if [[ -f "$state/forward.conf" ]] && grep -Fqx '  ForwardAgent ~/.ssh/yubikey/active/agent.sock' "$state/forward.conf"; then
+    prepare_agent "$role"
+  fi
+  ln -s "$role" "$stage/active"
+  mv -Tf -- "$stage/active" "$state/active"
+  set_git_signing yubikey "$root"
+  printf 'SSH and Git signing: %s\n' "$role"
+}
+
+prepare_agent() (
+  local profile="$state/$1" status=0 keys type blob
+  local SSH_AUTH_SOCK="$profile/agent.sock"
+  export SSH_AUTH_SOCK
+  check_pair "$profile/identity"
+  # Called by both ssh's connection hook and the CLI, including nested SSH from --on.
+  exec {agent_lock}<"$profile"
+  flock -x "$agent_lock"
+  read -r type blob _ < "$profile/identity.pub"
+  keys=$(ssh-add -L 2>/dev/null) || status=$?
+  case $status in
+    0)
+      if [[ $(awk '{print $1, $2}' <<< "$keys") == "$type $blob" ]]; then return; fi
+      die "Unexpected identities in the dedicated $1 agent at $SSH_AUTH_SOCK."
+      ;;
+    1) ;; # Reachable agent with no identities.
+    2)
+      if [[ -S $SSH_AUTH_SOCK && ! -L $SSH_AUTH_SOCK ]]; then rm -- "$SSH_AUTH_SOCK"; fi
+      (exec {agent_lock}<&-; if [[ -n ${lock_fd:-} ]]; then exec {lock_fd}<&-; fi
+       ssh-agent -s -a "$SSH_AUTH_SOCK" > /dev/null)
+      ;;
+    *) die "Cannot inspect the $1 agent (ssh-add exit $status)." ;;
+  esac
+  ssh-add "$profile/identity"
+)
+
+list_forwarding() {
+  if [[ ! -s "$state/forward.conf" ]]; then printf 'No forwarding hosts configured.\n'; return; fi
+  printf 'HOST\tSTATE\n'
+  awk '$1 == "Host" {host=$2} host != "" && $1 == "ForwardAgent" {print host "\t" ($2 == "no" ? "off" : "on"); host=""}' \
+    "$state/forward.conf" | LC_ALL=C sort
+}
+
+set_forwarding() {
+  local host=$1 value=$2
+  if [[ -f "$state/forward.conf" ]]; then
+    awk -v host="$host" '
+      $1 == "Host" { skip = tolower($2) == tolower(host) }
+      !skip
+    ' "$state/forward.conf" > "$stage/forward"
+  fi
+  printf 'Host %s\n' "$host" >> "$stage/forward"
+  if [[ $value != no ]]; then
+    ln -s "$root/scripts/yubikey-ssh" "$stage/agent-helper"
+    mv -Tf -- "$stage/agent-helper" "$state/agent-helper"
+    printf 'Match originalhost %s !final exec "~/.ssh/yubikey/agent-helper agent-ready"\n' "$host" >> "$stage/forward"
+    printf '  ForwardAgent %s\n' "$value" >> "$stage/forward"
+    # If the selected agent cannot be prepared, never forward a different agent.
+    printf 'Match originalhost %s\n  ForwardAgent no\n' "$host" >> "$stage/forward"
+    # OpenSSH 9.x checks for a login agent even when ForwardAgent specifies a socket.
+    # Supply one only if neither the user's config nor their environment provides it.
+    printf 'Match final originalhost %s !exec "printenv SSH_AUTH_SOCK | grep -q ."\n  IdentityAgent %s\n' \
+      "$host" "$value" >> "$stage/forward"
+  else
+    printf '  ForwardAgent no\n' >> "$stage/forward"
+  fi
+  mv -T -- "$stage/forward" "$state/forward.conf"
+  ensure_ssh_include
+}
+
+enable_host() {
+  local host=$1
+  valid_host "$host"
+  if ! grep -Fxiq -- "Host $host" "$state/hosts.conf" 2>/dev/null; then
+    if [[ -f "$state/hosts.conf" ]]; then cat "$state/hosts.conf" > "$stage/hosts"; fi
+    printf 'Host %s\n  IdentityFile ~/.ssh/yubikey/active/identity\n  IdentitiesOnly yes\n' "$host" >> "$stage/hosts"
+    mv -T -- "$stage/hosts" "$state/hosts.conf"
+  fi
+  ensure_ssh_include
+}
+
+ensure_ssh_include() {
+  # The Include must be in global scope, before any existing Host/Match block.
+  local config
+  config=$(realpath -m "$HOME/.ssh/config")
+  if [[ -f "$config" && $(head -n 1 "$config") == "$include" ]]; then return; fi
+  config_tmp=$(mktemp -- "${config}.yubikey.XXXXXX")
+  printf '%s\n' "$include" > "$config_tmp"
+  if [[ -f "$config" ]]; then
+    sed '1{/^Include ~\/\.ssh\/yubikey\/hosts\.conf$/d;}' "$config" >> "$config_tmp"
+  fi
+  mv -T -- "$config_tmp" "$config"
+  config_tmp=''
+}
+
+register_keys() {
+  local role key_type blob
+  local -a keys=()
+  for role in nano nfc; do
+    [[ -d "$state/$role" ]] || continue
+    check_pair "$state/$role/identity"
+    read -r key_type blob _ < "$state/$role/identity.pub"
+    # ssh joins remote arguments into shell text. Pass only our labels and base64.
+    [[ $key_type == sk-ssh-ed25519@openssh.com && $blob =~ ^[A-Za-z0-9+/]+=*$ ]] || die "Invalid public key: $role"
+    ssh-keygen -lf "$state/$role/identity.pub" >&2
+    keys+=("$role" "$blob")
+  done
+  (( ${#keys[@]} )) || die "Run yubikey-ssh setup first."
+  ssh -T "$1" sh -s -- "${keys[@]}" < "$root/lib/yubikey-authorize.sh"
+}
+
+trust_signer() {
+  local role=$1 email=$2 type blob entry
+  read -r type blob _ < "$state/$role/identity.pub"
+  entry="$email namespaces=\"git\" $type $blob"
+  if ! grep -Fxq -- "$entry" "$state/allowed_signers" 2>/dev/null; then
+    if [[ -f "$state/allowed_signers" ]]; then cat "$state/allowed_signers" > "$stage/signers"; fi
+    printf '%s\n' "$entry" >> "$stage/signers"
+    mv -T -- "$stage/signers" "$state/allowed_signers"
+  fi
+}
+
+doctor() {
+  local key
+  printf 'Selected: %s\n' "$(active_role)"
+  ssh -V
+  printf 'SSH_SK_HELPER: %s\n' "${SSH_SK_HELPER:-OpenSSH default}"
+  if [[ -n ${SSH_SK_HELPER:-} && ! -x $SSH_SK_HELPER ]]; then printf 'Helper is not executable\n'; fi
+  for key in nano nfc; do
+    if [[ -s "$state/$key/identity" && -s "$state/$key/identity.pub" ]]; then
+      printf '%s: ' "$key"; ssh-keygen -lf "$state/$key/identity.pub"
+    else
+      printf '%s: run yubikey-ssh setup %s\n' "$key" "$key"
+    fi
+  done
+  printf 'Git signing format: %s\nGit signing key: %s\n' \
+    "$(git config --get gpg.format || printf openpgp)" "$(git config --get user.signingkey || printf unset)"
+  if [[ -n $1 ]]; then
+    valid_host "$1"
+    ssh -G "$1" | awk '$1 == "identityfile" || $1 == "identitiesonly" || $1 == "forwardagent"'
+  fi
+}
+
+cmd=${1:-help}
+shift || true
+case "$cmd" in
+  help|-h|--help) usage; exit ;;
+  agent-ready)
+    role=$(active_role)
+    valid_role "$role"
+    prepare_agent "$role"
+    exit ;;
+  doctor) (( $# <= 1 )) || die "Usage: yubikey-ssh doctor [HOST]"; doctor "${1:-}"; exit ;;
+  use) (( $# == 1 )) || die "Usage: yubikey-ssh use nano|nfc"; valid_role "$1" ;;
+  host)
+    install_key=0
+    if [[ ${1:-} == --install ]]; then install_key=1; shift; fi
+    (( $# == 1 )) || die "Usage: yubikey-ssh host [--install] [USER@]HOST"
+    split_destination "$1"
+    ;;
+  forward)
+    forward='~/.ssh/yubikey/active/agent.sock'
+    account_signing=0
+    repo=''
+    case ${1:-} in
+      --list) (( $# == 1 )) || die "Usage: yubikey-ssh forward --list"; list_forwarding; exit ;;
+      --on) account_signing=1; shift ;;
+      --off) forward=no; shift ;;
+      --repo) [[ -n ${2:-} ]] || die "Specify a repository directory on the remote host."; repo=$2; shift 2 ;;
+    esac
+    (( $# == 1 )) || die "Usage: yubikey-ssh forward [--on | --off | --repo DIR] [USER@]HOST, or forward --list"
+    split_destination "$1"
+    ;;
+  setup)
+    (( $# <= 2 )) || die "Usage: yubikey-ssh setup [nano|nfc] [create|import]"
+    role=${1:-}
+    if [[ -z $role ]]; then
+      default=$(active_role)
+      [[ $default == nfc ]] || default=nano
+      printf 'YubiKey (nano/nfc) [%s] ' "$default" >&2
+      read -r role
+      role=${role:-$default}
+    fi
+    valid_role "$role"
+    case "${2:-}" in ''|create|import) ;; *) die "Choose create or import." ;; esac
+    email=$(git config --global --includes --get user.email) || die "Set git config --global user.email before setup."
+    [[ -n $email && $email != *[[:space:],*?!]* ]] || die "Git user.email must be a single literal signer identity."
+    ;;
+  *) usage >&2; exit 2 ;;
+esac
+
+mkdir -p "$state"
+exec {lock_fd}<"$state"
+flock -x "$lock_fd"
+stage=$(mktemp -d "$state/.setup.XXXXXXXX")
+config_tmp=''
+trap 'rm -rf -- "$stage"; if [[ -n $config_tmp ]]; then rm -f -- "$config_tmp"; fi' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+case "$cmd" in
+  setup)
+    prepare_profile "$role" "${2:-}"
+    trust_signer "$role" "$email"
+    enable_host github.com
+    select_profile "$role"
+    printf 'Public key for GitHub and servers: %s\n' "$state/$role/identity.pub"
+    ;;
+  use) select_profile "$1" ;;
+  forward)
+    if [[ $forward != no ]]; then
+      role=$(active_role)
+      valid_role "$role"
+      prepare_agent "$role"
+    fi
+    set_forwarding "$host" "$forward"
+    printf 'Agent forwarding for %s: %s\n' "$host" "$forward"
+    if (( account_signing )); then
+      # Transfer the helper as the installer's last, literal here-document.
+      {
+        cat "$root/lib/yubikey-remote-account.sh"
+        printf "\ninstall_signer <<'YUBIKEY_SIGNER_EOF'\n"
+        cat "$root/lib/yubikey-forwarded-signer"
+        printf '\nYUBIKEY_SIGNER_EOF\n'
+      } | ssh -T -o ControlPath=none "$destination" sh -s
+    elif [[ -n $repo ]]; then
+      # Remote arguments go through a login shell. Send the path and key as data instead.
+      read -r key_type key_blob _ < "$state/$role/identity.pub"
+      [[ $key_type == sk-ssh-ed25519@openssh.com && $key_blob =~ ^[A-Za-z0-9+/]+=*$ ]] || die "Invalid public key: $role"
+      {
+        printf "repo='%s'\n" "${repo//\'/\'\\\'\'}"
+        printf "expected='%s %s'\n" "$key_type" "$key_blob"
+        cat "$root/lib/yubikey-remote-signing.sh"
+      } | ssh -T -o ControlPath=none "$destination" sh -s
+    fi
+    ;;
+  host)
+    [[ -f "$state/active/identity" ]] || die "Run yubikey-ssh setup first."
+    if (( install_key )); then
+      # Bootstrap with the existing login method before changing this host's identities.
+      register_keys "$destination"
+    fi
+    enable_host "$host"
+    printf 'Enabled YubiKey SSH for %s\n' "$destination"
+    ;;
+esac

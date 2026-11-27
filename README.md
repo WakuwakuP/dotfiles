@@ -8,7 +8,7 @@
 
 - bash（モジュール分割）
 - tmux（prefix `C-t`、Vim キー、win32yank、tpm）
-- git（身元・GPG 署名・gh credential・ghq root。既定値 `~/ghq`）
+- git（YubiKey による SSH 署名または GPG 署名、gh credential、ghq root。既定値 `~/ghq`）
 - fzf（PowerShell の `g` と同等の ghq プレビュー） / starship / nano / gh CLI 設定
 - Cursor ユーザールールとプラグイン一覧
 
@@ -53,7 +53,7 @@ clone 済みの場合はこちら。
 `setup.sh` は次を順に確認する。ghq の保存先は対話時に変更でき、端末固有の設定として `~/.config/git/ghq.gitconfig` に保存される。初回の既定値は `~/ghq` で、再実行時は現在の設定値を維持する。
 
 1. 設定ファイルのシンボリックリンク（既存は `~/.dotfiles-backup-*` に退避）
-2. apt パッケージ（`tmux fzf bat gh git gpg`、あれば `lsd`）
+2. apt パッケージ（`tmux fzf bat gh git gpg openssh-client bash-completion`、あれば `lsd`）
 3. `ghq` とリポジトリ保存先（既定値 `~/ghq`）
 4. tmux plugin manager（tpm / tmux-sensible）
 5. WSL 用 `win32yank.exe`
@@ -115,13 +115,14 @@ flowchart TD
     C2A --> C2B{"バックアップ付きで ~/.ssh を置換する?"}
     C2B -->|Yes| C2C[既存設定を退避して復元]
     C2B -->|No| C3
-    C2C --> C3{"GPG 秘密鍵をインポートする?"}
-    C3 -->|Yes| C3A[秘密鍵ファイルを入力して対象フィンガープリントを検証]
-    C3 -->|No| Q9
-    C3A --> C3B{"検証済みの秘密鍵をインポートする?"}
-    C3B -->|Yes| C3C[gpg --import]
-    C3B -->|No| Q9
-    C3C --> Q9
+    C2C --> C3{"Git の署名方式を選択"}
+    C3 -->|YubiKey| YK[Nano または NFC を選び、鍵を取り込み・作成・再利用]
+    YK --> YKS[SSH 接続と Git 署名に選んだ鍵を設定]
+    YKS --> Q9
+    C3 -->|GPG| GPG[既存の GPG 鍵を使用、必要なら照合してインポート]
+    GPG --> GS[Git 署名に OpenPGP を設定]
+    GS --> Q9
+    C3 -->|現在の設定を維持| Q9
 
     Q9 -->|No| Notes
     Q9 -->|Yes| R1[不足する依存をaptで導入]
@@ -149,6 +150,102 @@ bash ./setup-secrets.sh
 ```
 
 機密情報はdotfilesへコピーされない。SSHの復元時は既存の `~/.ssh` を `~/.dotfiles-backup-*-secrets.*` へ退避し、GPGは指定ファイルを直接 `gpg --import` する。
+
+## YubiKey で SSH 接続と Git 署名
+
+`./setup.sh` の機密情報セットアップで、Git の署名方式を端末ごとに選ぶ。後から選び直すときは `bash ./setup-secrets.sh` を実行する。
+
+| 選択 | 動作 |
+| --- | --- |
+| `yubikey` | Nano / NFC を選び、SSH 接続と Git の SSH 署名を設定する。初回は Nano が既定。 |
+| `gpg` | 従来の GPG 鍵で OpenPGP 署名する。鍵が見つからない場合は秘密鍵ファイルから取り込める。 |
+| `keep`（Enter） | 現在の方式を引き継ぐ。端末固有の選択がない場合は従来の GPG 設定を使う。 |
+
+選択は `~/.config/git/signing.gitconfig` に保存する。`./setup.sh --yes` で再セットアップしても選択は維持される。
+
+### 鍵の準備
+
+**作成済みの鍵を使う場合**は、対象の YubiKey を 1 本だけ挿して取り込む。同じ YubiKey ならどの PC でも同じ公開鍵になるので、登録済みの GitHub アカウントやサーバーでの再登録は不要。
+
+```bash
+yubikey-ssh setup nano import    # 作成済みの Nano をこの端末で使う
+yubikey-ssh setup nfc import     # この端末で NFC も使う場合は挿し替えて取り込む
+yubikey-ssh use nano             # メイン機で普段使う鍵に戻す
+```
+
+**新品の YubiKey に鍵を作る場合**は `create` を選び、案内に従って PIN を入力してタッチする。
+
+```bash
+yubikey-ssh setup nano create
+```
+
+作成するのは `application=ssh:nano` または `ssh:nfc` の resident な `ed25519-sk` 鍵。日常利用はタッチを求め、鍵には毎回 PIN を要求するオプションを付けない。秘密鍵は YubiKey 内にあり、端末にはパスフレーズなしのハンドルと公開鍵を保存する。
+
+WSL では Windows の `ssh-sk-helper.exe` を自動検出する。`SSH_SK_HELPER` でパスを指定することもできる。Windows ヘルパー経由で resident 鍵を取り込む際は、Windows Terminal を管理者として開き、WSL に普段の Linux ユーザーで入る。作成・日常利用は通常の端末で行える。新規セットアップ直後の既存シェルには `exec bash -l` で設定を読み込む。[Yubico の WSL2 手順](https://developers.yubico.com/SSH/Securing_SSH_and_git_with_FIDO2_on_WSL2.html)
+
+セットアップ済みの鍵は再利用する。ノートの手順で作った `~/.ssh/id_ed25519_sk_nano` または `~/.ssh/id_ed25519_sk_nfc` と対応する `.pub` もそのまま使える。取り込みは指定した application の候補が 1 件のときだけ行う。
+
+### 接続先への登録
+
+セットアップすると `github.com` のクライアント設定と Git の SSH 署名設定が入る。初回は `~/.ssh/yubikey/nano/identity.pub` と `~/.ssh/yubikey/nfc/identity.pub` を GitHub にそれぞれ **Authentication Key** と **Signing Key** の両方で登録する。取り込み先の端末での再登録は不要。[GitHub の鍵登録手順](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)
+
+登録済みの接続先は、次のコマンドで端末側の設定が完了する。`my-server` は実際のホスト名か `~/.ssh/config` のエイリアスに置き換える。
+
+```bash
+yubikey-ssh host my-server
+ssh my-server
+```
+
+新しい Linux サーバーには、既存のログイン手段が使える状態で `yubikey-ssh host --install user@my-server` を実行できる。1 回の接続でこの端末に準備済みの Nano / NFC の公開鍵をリモートの `~/.ssh/authorized_keys` に追加し、端末側の設定も行う。登録済みの鍵とその制限オプションは維持する。接続先に `sh`、`awk`、`flock` が必要。
+
+`host` は `~/.ssh/config` の先頭に Include を追加し、指定したホストを `~/.ssh/yubikey/hosts.conf` に保存する。ホスト名、ポート、ユーザー名などは従来の設定を使う。既存の `IdentityFile` も OpenSSH の規則で候補に加わるので、候補一覧は `doctor ホスト名` で確認できる。`Ctrl-a` のホスト選択にも反映される。
+
+### 日常の切り替えと確認
+
+```bash
+yubikey-ssh use nfc              # 以降の SSH 接続と Git 署名に NFC を使う
+yubikey-ssh use nano             # Nano に戻す
+yubikey-ssh doctor github.com    # 選択中の鍵・指紋・有効な接続設定を表示
+ssh -T git@github.com            # 対象のキーだけを挿し、GitHub の認証メッセージを確認
+git log --show-signature -1      # 署名付きコミットの署名を検証
+```
+
+切り替えはこの端末の `~/.ssh/yubikey/active` リンク 1 個を更新する。SSH と Git はどちらも `active/identity` を参照するので、別のシェルや tmux にも次の認証から反映される。準備した両方の公開鍵を `allowed_signers` に残すため、切り替え前のコミットも検証できる。
+
+### SSH で開発機に入り、その場でコミットに署名する
+
+手元で Nano または NFC を選び、信頼する開発機を一度だけ有効にする。`devbox` は SSH のホスト名またはエイリアスで、`user@devbox` も指定できる。
+
+Bash では `yubikey-ssh forward --on dev` の後に Tab を押すと、`ssh dev` と同じ接続先候補が出る。`user@dev` も補完できる。
+
+```bash
+# 手元で初回に実行
+yubikey-ssh forward --on devbox
+yubikey-ssh forward --list   # ホストごとの on / off
+ssh devbox
+
+# 開発機で実行
+cd ~/src/app
+git commit -m "変更内容"
+```
+
+開発機では既存のリポジトリでも新しい clone でも、コミット時に手元の YubiKey にタッチして署名する。手元で `yubikey-ssh use nfc` または `use nano` を実行すると、接続中の開発機でも次の署名から切り替わる。GitHub で Verified を表示するには、使用する公開鍵を自分のアカウントの Signing Key に登録する。[GitHub の鍵登録手順](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)
+
+**変更されるファイル**
+
+- 手元では `~/.ssh/config` の先頭の Include から `~/.ssh/yubikey/forward.conf` を読む。対象ホストの接続時に `~/.ssh/yubikey/agent-helper` が選択中の鍵のエージェントを確認し、再起動後などは自動で起動してハンドルを読み込む。
+- 開発機ではログインユーザーの `~/.config/git/signing.gitconfig` に SSH 署名の設定を書き、必要に応じてユーザーの Git 設定に Include を追加する。`~/.config/git/yubikey-forwarded-signer` が署名のたびに転送中の公開鍵を選ぶ。`--on` は各リポジトリの `.git/config` を編集しない。以前の `--repo` で公開鍵を固定したリポジトリもこの署名コマンドを使う。リポジトリ独自の署名形式・署名コマンド・署名の有無の設定は Git の優先順位に従う。
+- 開発機は Linux、Bash、Git 2.35 以降、OpenSSH と `flock` を想定する。秘密鍵とハンドルは手元に置いたまま使える。
+
+| 操作 | 手元で実行するコマンド |
+| --- | --- |
+| 接続先ユーザーの全リポジトリで署名する | `yubikey-ssh forward --on devbox` |
+| 手元の転送設定を一覧表示する | `yubikey-ssh forward --list` |
+| 開発機の Git 設定を変えずに転送だけ有効にする | `yubikey-ssh forward devbox` |
+| 個別リポジトリだけに署名を設定する | `yubikey-ssh forward --repo src/app devbox` |
+| 新しい接続で転送を無効にする | `yubikey-ssh forward --off devbox` |
+
+開発機で `ssh-add -l` を実行すると、転送された鍵の指紋を確認できる。`--off` はこの端末からの新しい接続に適用され、開発機の Git 設定は保持される。接続中の転送も終了するにはその SSH セッションを閉じる。SSH 多重化を使っている場合は `ssh -O exit devbox` でマスター接続も終了できる。サーバーではエージェント転送が許可されている必要がある。[OpenSSH の ForwardAgent](https://man.openbsd.org/ssh_config#ForwardAgent)
 
 ## Ubuntu の再起動通知（Discord）
 
