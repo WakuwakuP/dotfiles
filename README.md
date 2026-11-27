@@ -196,7 +196,7 @@ yubikey-ssh host my-server
 ssh my-server
 ```
 
-新しい Linux サーバーには、既存のログイン手段が使える状態で `yubikey-ssh host --install user@my-server` を実行できる。1 回の接続でこの端末に準備済みの Nano / NFC の公開鍵をリモートの `~/.ssh/authorized_keys` に追加し、端末側の設定も行う。登録済みの鍵とその制限オプションは維持する。接続先に `sh`、`awk`、`flock` が必要。
+新しい Linux サーバーには、既存のログイン手段が使える状態で `yubikey-ssh host --install user@my-server` を実行できる。1 回の接続でこの端末に準備済みの Nano / NFC の公開鍵をリモートの `~/.ssh/authorized_keys` に追加し、端末側の設定も行う。登録済みの鍵とその制限オプションは維持する。ファイル内に既に `restrict` がある場合、新しく追加する鍵にも `restrict` を付ける。まだ制限がないファイルには、通常のログイン鍵として追加する。接続先に `sh`、`awk`、`flock` が必要。
 
 `host` は `~/.ssh/config` の先頭に Include を追加し、指定したホストを `~/.ssh/yubikey/hosts.conf` に保存する。ホスト名、ポート、ユーザー名などは従来の設定を使う。既存の `IdentityFile` も OpenSSH の規則で候補に加わるので、候補一覧は `doctor ホスト名` で確認できる。`Ctrl-a` のホスト選択にも反映される。
 
@@ -244,6 +244,8 @@ git commit -m "変更内容"
 | 開発機の Git 設定を変えずに転送だけ有効にする | `yubikey-ssh forward devbox` |
 | 個別リポジトリだけに署名を設定する | `yubikey-ssh forward --repo src/app devbox` |
 | 新しい接続で転送を無効にする | `yubikey-ssh forward --off devbox` |
+
+`forward --repo` は、実行した時点で選択中の公開鍵をそのリポジトリの `user.signingkey` に書き込む。あとから手元で `use nano` や `use nfc` に切り替えても、そのリポジトリの署名鍵は変わらない。切り替えるときは同じ `--repo` を再実行する。`--on` のアカウント単位の署名は、接続中の鍵に次の署名から追従する。`--repo` は `--on` や `--off` と同時には指定できない。
 
 開発機で `ssh-add -l` を実行すると、転送された鍵の指紋を確認できる。`--off` はこの端末からの新しい接続に適用され、開発機の Git 設定は保持される。接続中の転送も終了するにはその SSH セッションを閉じる。SSH 多重化を使っている場合は `ssh -O exit devbox` でマスター接続も終了できる。サーバーではエージェント転送が許可されている必要がある。[OpenSSH の ForwardAgent](https://man.openbsd.org/ssh_config#ForwardAgent)
 

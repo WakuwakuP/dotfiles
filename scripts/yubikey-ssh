@@ -262,12 +262,32 @@ case "$cmd" in
     forward='~/.ssh/yubikey/active/agent.sock'
     account_signing=0
     repo=''
-    case ${1:-} in
-      --list) (( $# == 1 )) || die "Usage: yubikey-ssh forward --list"; list_forwarding; exit ;;
-      --on) account_signing=1; shift ;;
-      --off) forward=no; shift ;;
-      --repo) [[ -n ${2:-} ]] || die "Specify a repository directory on the remote host."; repo=$2; shift 2 ;;
-    esac
+    if [[ ${1:-} == --list ]]; then
+      (( $# == 1 )) || die "Usage: yubikey-ssh forward --list"
+      list_forwarding
+      exit
+    fi
+    while [[ ${1:-} == -* ]]; do
+      case $1 in
+        --on)
+          [[ $account_signing -eq 0 && $forward != no && -z $repo ]] || die "--on cannot be combined with --off or --repo."
+          account_signing=1
+          shift
+          ;;
+        --off)
+          [[ $account_signing -eq 0 && -z $repo ]] || die "--off cannot be combined with --on or --repo."
+          forward=no
+          shift
+          ;;
+        --repo)
+          [[ $account_signing -eq 0 && $forward != no && -z $repo ]] || die "--repo cannot be combined with --on or --off."
+          [[ -n ${2:-} && ${2:-} != -* ]] || die "Specify a repository directory on the remote host."
+          repo=$2
+          shift 2
+          ;;
+        *) die "Usage: yubikey-ssh forward [--on | --off | --repo DIR] [USER@]HOST, or forward --list" ;;
+      esac
+    done
     (( $# == 1 )) || die "Usage: yubikey-ssh forward [--on | --off | --repo DIR] [USER@]HOST, or forward --list"
     split_destination "$1"
     ;;
@@ -307,9 +327,14 @@ case "$cmd" in
     ;;
   use) select_profile "$1" ;;
   forward)
-    if [[ $forward != no ]]; then
+    if [[ -n $repo && $forward == no ]]; then
+      die "--repo cannot be combined with --off."
+    fi
+    if [[ $forward != no || -n $repo ]]; then
       role=$(active_role)
       valid_role "$role"
+    fi
+    if [[ $forward != no ]]; then
       prepare_agent "$role"
     fi
     set_forwarding "$host" "$forward"
