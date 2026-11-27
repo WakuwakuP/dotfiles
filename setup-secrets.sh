@@ -6,13 +6,14 @@ set -euo pipefail
 DOTFILES="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=lib/ui.sh
 . "${DOTFILES}/lib/ui.sh"
+. "${DOTFILES}/lib/git-signing.sh"
 
 ASSUME_YES=0
 SECRETS_BACKUP_DIR=""
 LAST_BACKUP_PATH=""
 SSH_STAGE=""
 SSH_ORIGINAL_MOVED=0
-GPG_SIGNING_KEY="339BA29AD11FE29A4E5AD8B6D6077D4B10C57FA3"
+GPG_SIGNING_KEY=$(git config --file "$DOTFILES/config/git/gitconfig" user.signingkey)
 
 resolve_input_path() {
   local path="$1"
@@ -226,6 +227,23 @@ setup_gpg() {
   fi
 }
 
+choose_signing() {
+  local choice
+  while true; do
+    choice=$(ask_value "Git signing: YubiKey (SSH), GPG, or keep current settings? [yubikey/gpg/keep]" "keep")
+    case "${choice,,}" in
+      yubikey) bash "$DOTFILES/scripts/yubikey-ssh" setup; return ;;
+      gpg)
+        setup_gpg
+        set_git_signing gpg "$DOTFILES"
+        ok "Git signing uses OpenPGP ($GPG_SIGNING_KEY)"
+        return ;;
+      keep) skip "Git signing configuration"; return ;;
+      *) warn "Enter yubikey, gpg or keep." ;;
+    esac
+  done
+}
+
 main() {
   info "Machine-local credentials are not saved in the dotfiles repository"
 
@@ -241,11 +259,7 @@ main() {
     skip "SSH restore"
   fi
 
-  if ask_yes "Import the GPG private key?" n; then
-    setup_gpg
-  else
-    skip "GPG private key import"
-  fi
+  choose_signing
 
   ok "credential setup finished"
 }

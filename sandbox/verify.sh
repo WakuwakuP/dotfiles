@@ -66,7 +66,8 @@ check "tmux-sensible cloned" test -d "$HOME/.tmux/plugins/tmux-sensible"
 
 check "git user.name" test "$(git config --global user.name)" = WakuwakuP
 check "git user.email" test "$(git config --global user.email)" = naoki.fujisawa@wakuwakup.net
-check "git gpgsign" test "$(git config --global commit.gpgsign)" = true
+check "noninteractive setup skips signing selection" test ! -e "$HOME/.config/git/signing.gitconfig"
+check "git gpgsign" test "$(git config --global --includes commit.gpgsign)" = true
 check "ghq.root configured" test -n "$(git config --global --includes --get ghq.root)"
 
 # Interactive bash without auto-creating a tmux session.
@@ -82,6 +83,7 @@ check "alias ll defined" eval_in_bash "alias ll >/dev/null"
 check "DOTFILES exported" eval_in_bash "[[ -n \"\$DOTFILES\" && -d \"\$DOTFILES/config/bash/lib\" ]]"
 check "starship initialized" eval_in_bash '[[ "$STARSHIP_SHELL" == bash ]]'
 check "SSH completion regression checks" bash "$ROOT/sandbox/verify-ssh-completion.sh"
+check "YubiKey SSH setup and signing" bash "$ROOT/sandbox/verify-yubikey-ssh.sh"
 check "reboot notification regression checks" bash "$ROOT/sandbox/verify-reboot-notify.sh"
 check "reboot setup regression checks" bash "$ROOT/sandbox/verify-reboot-setup.sh"
 
@@ -108,7 +110,7 @@ fzf_ssh_via_alias="$(
     fzf() { echo testhost; }
     tmux_ssh() { printf "ALIAS:%s\n" "$1"; }
     alias ssh=tmux_ssh
-    ssh() { printf "DIRECT:%s\n" "$1"; }
+    function ssh { printf "DIRECT:%s\n" "$1"; }
     fzf-ssh
   '
 )"

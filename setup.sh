@@ -88,6 +88,7 @@ step_links() {
   link_file "$HOME/.profile" "${DOTFILES}/config/bash/profile"
   link_file "$HOME/.bash_logout" "${DOTFILES}/config/bash/bash_logout"
   link_file "$HOME/.gitconfig" "${DOTFILES}/config/git/gitconfig"
+  link_file "$HOME/.local/bin/yubikey-ssh" "${DOTFILES}/scripts/yubikey-ssh"
   link_file "$HOME/.tmux.conf" "${DOTFILES}/config/tmux/tmux.conf"
   link_file "$HOME/.nanorc" "${DOTFILES}/config/nano/nanorc"
   link_file "$HOME/.config/gh/config.yml" "${DOTFILES}/config/gh/config.yml"
@@ -138,7 +139,7 @@ step_packages() {
   info "Install apt packages: tmux fzf bat gh git gpg curl"
   sudo apt-get update
   ensure_universe
-  sudo apt-get install -y tmux fzf bat git gpg curl ca-certificates
+  sudo apt-get install -y tmux fzf bat git gpg openssh-client bash-completion curl ca-certificates
   if apt-cache show lsd >/dev/null 2>&1; then
     sudo apt-get install -y lsd
   else
@@ -330,7 +331,7 @@ print_secrets_note() {
 
 ${YELLOW}Machine-local credentials are not stored in this repository:${RESET}
   - SSH private keys and ~/.ssh/config hosts
-  - GPG private key ${CYAN}339BA29AD11FE29A4E5AD8B6D6077D4B10C57FA3${RESET} (commits are signed)
+  - Git signing credentials: YubiKey SSH handles or a GPG private key
   - gh authentication token
 
 Run the credential setup again with: ${CYAN}bash ${DOTFILES}/setup-secrets.sh${RESET}

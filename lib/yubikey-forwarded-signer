@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Git's SSH signing program on a development host. Verification uses stock OpenSSH.
+set -euo pipefail
+if [[ ${1:-} != --public-key && ! ( ${1:-} == -Y && ${2:-} == sign ) ]]; then
+  exec ssh-keygen "$@"
+fi
+
+identities=$(ssh-add -L) || { echo 'Connect with YubiKey agent forwarding to sign.' >&2; exit 1; }
+public_key=$(awk 'NR == 1 && $1 == "sk-ssh-ed25519@openssh.com" && NF >= 2 { key=$1 " " $2 }
+  END { if (NR != 1 || !key) exit 1; print key }' <<< "$identities") ||
+  { echo 'Expected exactly one forwarded ed25519-sk identity.' >&2; exit 1; }
+if [[ $1 == --public-key ]]; then
+  printf 'key::%s\n' "$public_key"
+  exit
+fi
+
+# Git can supply an older user.signingkey from an include or --repo setup.
+# Select the session's key for each signature without sharing a mutable key file.
+args=("$@")
+for ((i=2; i+1<${#args[@]}; i++)); do
+  if [[ ${args[i]} == -f ]]; then
+    pub=$(mktemp)
+    trap 'rm -f -- "$pub"' EXIT
+    printf '%s\n' "$public_key" > "$pub"
+    args[i+1]=$pub
+    ssh-keygen "${args[@]}"
+    exit
+  fi
+done
+echo 'Missing SSH signing key argument (-f).' >&2
+exit 1
