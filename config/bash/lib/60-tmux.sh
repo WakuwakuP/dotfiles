@@ -36,17 +36,28 @@ tmux_automatically_attach_session() {
     return 1
   fi
 
-  if tmux has-session >/dev/null 2>&1 && tmux list-sessions | grep -qE '.*]$'; then
-    tmux list-sessions
+  local -a client=(tmux)
+  # An existing pane keeps the Windows interop permissions of its original shell.
+  if [[ -n ${WSL_DISTRO_NAME:-} ]]; then
+    local whoami_exe
+    whoami_exe=$(type -P whoami.exe) || whoami_exe=/mnt/c/Windows/System32/whoami.exe
+    # Match the locale-independent High or System integrity SID in the Windows token.
+    if [[ -x $whoami_exe ]] && "$whoami_exe" /groups /fo csv /nh </dev/null 2>/dev/null | grep -Eq '"S-1-16-(12288|16384)"'; then
+      client+=(-L wsl-admin)
+    fi
+  fi
+
+  if "${client[@]}" list-sessions -F '#{session_attached}' 2>/dev/null | grep -Fxq 0; then
+    "${client[@]}" list-sessions
     echo -n "Tmux: attach? (y/N/num) "
     read -r
     if [[ "$REPLY" =~ ^[Yy]$ ]] || [[ "$REPLY" == '' ]]; then
-      if tmux attach-session; then
+      if "${client[@]}" attach-session; then
         echo "$(tmux -V) attached session"
         return 0
       fi
     elif [[ "$REPLY" =~ ^[0-9]+$ ]]; then
-      if tmux attach -t "$REPLY"; then
+      if "${client[@]}" attach -t "$REPLY"; then
         echo "$(tmux -V) attached session"
         return 0
       fi
@@ -58,7 +69,7 @@ tmux_automatically_attach_session() {
     tmux_config=$(cat "$HOME/.tmux.conf" <(echo 'set-option -g default-command "reattach-to-user-namespace -l $SHELL"'))
     tmux -f <(echo "$tmux_config") new-session && echo "$(tmux -V) created new session supported OS X"
   else
-    tmux new-session && echo "tmux created new session"
+    "${client[@]}" new-session && echo "tmux created new session"
   fi
 }
 

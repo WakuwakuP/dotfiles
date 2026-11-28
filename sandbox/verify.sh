@@ -83,6 +83,7 @@ check "alias ll defined" eval_in_bash "alias ll >/dev/null"
 check "DOTFILES exported" eval_in_bash "[[ -n \"\$DOTFILES\" && -d \"\$DOTFILES/config/bash/lib\" ]]"
 check "starship initialized" eval_in_bash '[[ "$STARSHIP_SHELL" == bash ]]'
 check "SSH completion regression checks" bash "$ROOT/sandbox/verify-ssh-completion.sh"
+check "WSL tmux server selection" bash "$ROOT/sandbox/verify-wsl-tmux.sh"
 check "YubiKey SSH setup and signing" bash "$ROOT/sandbox/verify-yubikey-ssh.sh"
 check "reboot notification regression checks" bash "$ROOT/sandbox/verify-reboot-notify.sh"
 check "reboot setup regression checks" bash "$ROOT/sandbox/verify-reboot-setup.sh"
