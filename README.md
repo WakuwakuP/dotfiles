@@ -211,7 +211,7 @@ ssh my-server
 ```bash
 yubikey-ssh use nfc              # 以降の SSH 接続と Git 署名に NFC を使う
 yubikey-ssh use nano             # Nano に戻す
-yubikey-ssh doctor github.com    # 選択中の鍵・指紋・有効な接続設定を表示
+yubikey-ssh doctor github.com    # Git と SSH の active パスに、選択中の nano / nfc と参照先を併記
 ssh -T git@github.com            # 対象のキーだけを挿し、GitHub の認証メッセージを確認
 git log --show-signature -1      # 署名付きコミットの署名を検証
 ```

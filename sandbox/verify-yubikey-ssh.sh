@@ -66,7 +66,24 @@ for value in 'hostname example.org' 'user default-user' 'port 2222' 'identitieso
 done
 other=$(ssh -G -F "$tmp/client.conf" other)
 ! grep -Fq 'yubikey/active/identity' <<< "$other" || exit 1
-yk doctor
+(
+  export DOCTOR_CONFIG="$tmp/doctor.conf"
+  cp "$tmp/client.conf" "$DOCTOR_CONFIG"
+  printf '\nHost test-box\n  IdentityFile ~/.ssh/other\n  ForwardAgent %s/active/agent.sock\n' "$state" >> "$DOCTOR_CONFIG"
+  ssh() { command ssh -F "$DOCTOR_CONFIG" "$@"; }
+  export -f ssh
+  for role in nfc nano; do
+    yk use "$role"
+    yk doctor test-box > "$tmp/doctor.out"
+    key_path="~/.ssh/yubikey/active/identity -> $role ($state/$role/identity)"
+    grep -Fxq "Git signing key: $key_path" "$tmp/doctor.out"
+    grep -Fxq "identityfile $key_path" "$tmp/doctor.out"
+    grep -Fxq "identityfile ~/.ssh/other" "$tmp/doctor.out"
+    grep -Fxq "forwardagent $state/active/agent.sock -> $role ($state/$role/agent.sock)" "$tmp/doctor.out"
+  done
+  HOME="$tmp/unconfigured" yk doctor test-box > "$tmp/doctor.out"
+  grep -Fxq 'identityfile ~/.ssh/yubikey/active/identity (unresolved active profile)' "$tmp/doctor.out"
+)
 
 if yk forward --off --repo app test-box >"$tmp/combo.out" 2>"$tmp/combo.err"; then
   echo 'forward --off --repo should fail' >&2
@@ -141,6 +158,7 @@ grep -Eq '^sk-ssh-ed25519@openssh.com .+ yubikey-nano$' "$empty/.ssh/authorized_
 if grep -q '^restrict ' "$empty/.ssh/authorized_keys"; then exit 1; fi
 
 # Simulate only resident-key enumeration. Signatures, handles and Git are real.
+rm -- "$tmp/bin/ssh"
 export RECOVERY="$tmp/recovery"
 mkdir "$RECOVERY"
 cp "$state/nfc/identity" "$RECOVERY/id_ed25519_sk_rk_nfc_abcd"
@@ -161,6 +179,8 @@ cp "$state/nano/identity" "$HOME/.ssh/id_ed25519_sk_nano"
 cp "$state/nano/identity.pub" "$HOME/.ssh/id_ed25519_sk_nano.pub"
 yk setup nano
 cmp "$HOME/.ssh/yubikey/active/identity" "$state/nano/identity"
+yk doctor > "$tmp/doctor.out"
+grep -Fxq "Git signing key: ~/.ssh/yubikey/active/identity -> nano ($HOME/.ssh/id_ed25519_sk_nano)" "$tmp/doctor.out"
 cp "$RECOVERY/id_ed25519_sk_rk_nfc_abcd" "$RECOVERY/id_ed25519_sk_rk_nfc_other"
 cp "$RECOVERY/id_ed25519_sk_rk_nfc_abcd.pub" "$RECOVERY/id_ed25519_sk_rk_nfc_other.pub"
 reject yk setup nfc import
