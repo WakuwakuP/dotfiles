@@ -45,8 +45,8 @@ check_pair() {
 }
 
 prepare_profile() {
-  local role=$1 mode=$2 legacy="$HOME/.ssh/id_ed25519_sk_$1" key file
-  local -a matches=()
+  local role=$1 mode=$2 legacy="$HOME/.ssh/id_ed25519_sk_$1" key file pub type application
+  local -a matches=() defaults=()
   if [[ -d "$state/$role" ]]; then
     check_pair "$state/$role/identity"
     return
@@ -79,10 +79,23 @@ prepare_profile() {
         mkdir "$stage/recovered"
         (cd "$stage/recovered" && ssh-keygen -K) ||
           die "ssh-keygen -K failed. If you have the original handle and public key, place them at $legacy and $legacy.pub and rerun setup."
-        for file in "$stage/recovered/id_ed25519_sk_rk_$role" "$stage/recovered/id_ed25519_sk_rk_${role}_"*; do
-          [[ -f "$file" && -f "$file.pub" ]] && matches+=("$file")
+        # ssh-keygen -K writes the credential's application as the public-key comment.
+        for pub in "$stage/recovered"/id_ed25519_sk_rk*.pub; do
+          file=${pub%.pub}
+          [[ -f $pub && -f $file ]] || continue
+          read -r type _ application < "$pub" || continue
+          [[ $type == sk-ssh-ed25519@openssh.com ]] || continue
+          case "$application" in
+            "ssh:$role") matches+=("$file") ;;
+            ssh:) defaults+=("$file") ;;
+          esac
         done
-        [[ ${#matches[@]} == 1 ]] || die "Expected one resident ssh:$role key, found ${#matches[@]}. Check the token and application."
+        if (( ${#matches[@]} == 0 )); then
+          (( ${#defaults[@]} == 1 )) || die "No resident ssh:$role key. Expected one default ssh: key, found ${#defaults[@]}."
+          matches=("${defaults[@]}")
+          printf 'Using the default ssh: credential for the %s profile.\n' "$role" >&2
+        fi
+        (( ${#matches[@]} == 1 )) || die "Expected one resident ssh:$role key, found ${#matches[@]}."
         mv -- "${matches[0]}" "$key"
         mv -- "${matches[0]}.pub" "$key.pub"
         ;;
@@ -224,9 +237,24 @@ trust_signer() {
   fi
 }
 
+doctor_path() {
+  local value=$1 role=$2 path=$1
+  if [[ $path == '~/'* ]]; then path="$HOME/${path#'~/'}"; fi
+  printf '%s' "$value"
+  if [[ $path == "$state/active/"* ]]; then
+    if [[ ( $role == nano || $role == nfc ) && -d $state/$role ]]; then
+      printf ' -> %s (%s)' "$role" "$(realpath -m -- "$state/$role/${path#"$state/active/"}")"
+    else
+      printf ' (unresolved active profile)'
+    fi
+  fi
+  printf '\n'
+}
+
 doctor() {
-  local key
-  printf 'Selected: %s\n' "$(active_role)"
+  local key role format signing_key option value
+  role=$(active_role)
+  printf 'Selected: %s\n' "$role"
   ssh -V
   printf 'SSH_SK_HELPER: %s\n' "${SSH_SK_HELPER:-OpenSSH default}"
   if [[ -n ${SSH_SK_HELPER:-} && ! -x $SSH_SK_HELPER ]]; then printf 'Helper is not executable\n'; fi
@@ -237,11 +265,18 @@ doctor() {
       printf '%s: run yubikey-ssh setup %s\n' "$key" "$key"
     fi
   done
-  printf 'Git signing format: %s\nGit signing key: %s\n' \
-    "$(git config --get gpg.format || printf openpgp)" "$(git config --get user.signingkey || printf unset)"
+  format=$(git config --get gpg.format || printf openpgp)
+  signing_key=$(git config --get user.signingkey || printf unset)
+  printf 'Git signing format: %s\nGit signing key: ' "$format"
+  if [[ $format == ssh ]]; then doctor_path "$signing_key" "$role"; else printf '%s\n' "$signing_key"; fi
   if [[ -n $1 ]]; then
     valid_host "$1"
-    ssh -G "$1" | awk '$1 == "identityfile" || $1 == "identitiesonly" || $1 == "forwardagent"'
+    ssh -G "$1" | while read -r option value; do
+      case "$option" in
+        identityfile|forwardagent) printf '%s ' "$option"; doctor_path "$value" "$role" ;;
+        identitiesonly) printf '%s %s\n' "$option" "$value" ;;
+      esac
+    done
   fi
 }
 

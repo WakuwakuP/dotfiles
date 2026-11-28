@@ -189,7 +189,7 @@ WSL では Windows の `ssh-sk-helper.exe` を自動検出する。`SSH_SK_HELPE
 wsl.exe -d Ubuntu --exec sh -c 'exec ~/.local/bin/yubikey-ssh setup nfc import'
 ```
 
-セットアップ済みの鍵は再利用する。ノートの手順で作った `~/.ssh/id_ed25519_sk_nano` または `~/.ssh/id_ed25519_sk_nfc` と対応する `.pub` もそのまま使える。取り込みは指定した application の候補が 1 件のときだけ行う。
+セットアップ済みの鍵は再利用する。ノートの手順で作った `~/.ssh/id_ed25519_sk_nano` または `~/.ssh/id_ed25519_sk_nfc` と対応する `.pub` もそのまま使える。`import` は選んだ役割の鍵（`ssh:nano` または `ssh:nfc`）を優先する。その鍵がなければ、OpenSSH の既定の application（`ssh:`）で作った鍵を選んだ役割に割り当てる。該当する鍵が複数ある場合は取り込みを中止する。
 
 ### 接続先への登録
 
@@ -211,7 +211,7 @@ ssh my-server
 ```bash
 yubikey-ssh use nfc              # 以降の SSH 接続と Git 署名に NFC を使う
 yubikey-ssh use nano             # Nano に戻す
-yubikey-ssh doctor github.com    # 選択中の鍵・指紋・有効な接続設定を表示
+yubikey-ssh doctor github.com    # Git と SSH の active パスに、選択中の nano / nfc と参照先を併記
 ssh -T git@github.com            # 対象のキーだけを挿し、GitHub の認証メッセージを確認
 git log --show-signature -1      # 署名付きコミットの署名を検証
 ```
