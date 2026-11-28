@@ -144,7 +144,9 @@ if grep -q '^restrict ' "$empty/.ssh/authorized_keys"; then exit 1; fi
 export RECOVERY="$tmp/recovery"
 mkdir "$RECOVERY"
 cp "$state/nfc/identity" "$RECOVERY/id_ed25519_sk_rk_nfc_abcd"
-cp "$state/nfc/identity.pub" "$RECOVERY/id_ed25519_sk_rk_nfc_abcd.pub"
+awk '{print $1, $2, "ssh:nfc"}' "$state/nfc/identity.pub" > "$RECOVERY/id_ed25519_sk_rk_nfc_abcd.pub"
+default_key="$RECOVERY/id_ed25519_sk_rk_$(printf '%064x' 1)"
+ssh-keygen -q -t ed25519-sk -O resident -C 'ssh:' -N '' -f "$default_key"
 cat > "$tmp/bin/ssh-keygen" <<'EOF'
 #!/usr/bin/env bash
 if [[ ${1:-} == -K ]]; then cp -- "$RECOVERY/"* .; exit; fi
@@ -166,4 +168,25 @@ reject yk setup nfc import
 rm "$RECOVERY/id_ed25519_sk_rk_nfc_other" "$RECOVERY/id_ed25519_sk_rk_nfc_other.pub"
 yk setup nfc import
 cmp "$HOME/.ssh/yubikey/active/identity" "$state/nfc/identity"
+
+export HOME="$tmp/default-home" XDG_CONFIG_HOME="$tmp/default-home/.config"
+mkdir -p "$HOME"
+git config --global user.email tester@example.org
+git config --global user.name Tester
+rm -- "$RECOVERY/id_ed25519_sk_rk_nfc_abcd" "$RECOVERY/id_ed25519_sk_rk_nfc_abcd.pub"
+cp "$state/nano/identity" "$RECOVERY/id_ed25519_sk_rk_nano"
+awk '{print $1, $2, "ssh:nano"}' "$state/nano/identity.pub" > "$RECOVERY/id_ed25519_sk_rk_nano.pub"
+# A missing pair, another role, or two default credentials must not select a profile.
+mv -- "$default_key" "$tmp/default-handle"
+reject yk setup nfc import
+mv -- "$tmp/default-handle" "$default_key"
+ssh-keygen -q -t ed25519-sk -O resident -C 'ssh:' -N '' -f "$RECOVERY/id_ed25519_sk_rk"
+reject yk setup nfc import
+[[ ! -e "$HOME/.ssh/yubikey/nfc" && ! -L "$HOME/.ssh/yubikey/active" ]]
+rm -- "$RECOVERY/id_ed25519_sk_rk" "$RECOVERY/id_ed25519_sk_rk.pub"
+yk setup nfc import
+cmp "$HOME/.ssh/yubikey/active/identity" "$default_key"
+git init -q "$HOME/repo"
+git -C "$HOME/repo" commit -qm 'default credential' --allow-empty
+git -C "$HOME/repo" verify-commit HEAD
 echo "OK   YubiKey enrollment, key selection, SSH config, Git signing and recovery"

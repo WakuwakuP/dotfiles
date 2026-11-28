@@ -189,7 +189,7 @@ WSL では Windows の `ssh-sk-helper.exe` を自動検出する。`SSH_SK_HELPE
 wsl.exe -d Ubuntu --exec sh -c 'exec ~/.local/bin/yubikey-ssh setup nfc import'
 ```
 
-セットアップ済みの鍵は再利用する。ノートの手順で作った `~/.ssh/id_ed25519_sk_nano` または `~/.ssh/id_ed25519_sk_nfc` と対応する `.pub` もそのまま使える。取り込みは指定した application の候補が 1 件のときだけ行う。
+セットアップ済みの鍵は再利用する。ノートの手順で作った `~/.ssh/id_ed25519_sk_nano` または `~/.ssh/id_ed25519_sk_nfc` と対応する `.pub` もそのまま使える。`import` は選んだ役割の鍵（`ssh:nano` または `ssh:nfc`）を優先する。その鍵がなければ、OpenSSH の既定の application（`ssh:`）で作った鍵を選んだ役割に割り当てる。該当する鍵が複数ある場合は取り込みを中止する。
 
 ### 接続先への登録
 

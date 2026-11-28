@@ -45,8 +45,8 @@ check_pair() {
 }
 
 prepare_profile() {
-  local role=$1 mode=$2 legacy="$HOME/.ssh/id_ed25519_sk_$1" key file
-  local -a matches=()
+  local role=$1 mode=$2 legacy="$HOME/.ssh/id_ed25519_sk_$1" key file pub type application
+  local -a matches=() defaults=()
   if [[ -d "$state/$role" ]]; then
     check_pair "$state/$role/identity"
     return
@@ -79,10 +79,23 @@ prepare_profile() {
         mkdir "$stage/recovered"
         (cd "$stage/recovered" && ssh-keygen -K) ||
           die "ssh-keygen -K failed. If you have the original handle and public key, place them at $legacy and $legacy.pub and rerun setup."
-        for file in "$stage/recovered/id_ed25519_sk_rk_$role" "$stage/recovered/id_ed25519_sk_rk_${role}_"*; do
-          [[ -f "$file" && -f "$file.pub" ]] && matches+=("$file")
+        # ssh-keygen -K writes the credential's application as the public-key comment.
+        for pub in "$stage/recovered"/id_ed25519_sk_rk*.pub; do
+          file=${pub%.pub}
+          [[ -f $pub && -f $file ]] || continue
+          read -r type _ application < "$pub" || continue
+          [[ $type == sk-ssh-ed25519@openssh.com ]] || continue
+          case "$application" in
+            "ssh:$role") matches+=("$file") ;;
+            ssh:) defaults+=("$file") ;;
+          esac
         done
-        [[ ${#matches[@]} == 1 ]] || die "Expected one resident ssh:$role key, found ${#matches[@]}. Check the token and application."
+        if (( ${#matches[@]} == 0 )); then
+          (( ${#defaults[@]} == 1 )) || die "No resident ssh:$role key. Expected one default ssh: key, found ${#defaults[@]}."
+          matches=("${defaults[@]}")
+          printf 'Using the default ssh: credential for the %s profile.\n' "$role" >&2
+        fi
+        (( ${#matches[@]} == 1 )) || die "Expected one resident ssh:$role key, found ${#matches[@]}."
         mv -- "${matches[0]}" "$key"
         mv -- "${matches[0]}.pub" "$key.pub"
         ;;
