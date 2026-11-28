@@ -183,6 +183,12 @@ yubikey-ssh setup nano create
 
 WSL では Windows の `ssh-sk-helper.exe` を自動検出する。`SSH_SK_HELPER` でパスを指定することもできる。Windows ヘルパー経由で resident 鍵を取り込む際は、Windows Terminal を管理者として開き、WSL に普段の Linux ユーザーで入る。作成・日常利用は通常の端末で行える。新規セットアップ直後の既存シェルには `exec bash -l` で設定を読み込む。[Yubico の WSL2 手順](https://developers.yubico.com/SSH/Securing_SSH_and_git_with_FIDO2_on_WSL2.html)
 
+管理者の Windows Terminal から WSL を開くと、dotfiles の自動接続は管理者用の tmux サーバー（`wsl-admin`）を使う。そのペインで普段どおり `yubikey-ssh setup nfc import` を実行できる。以前から開いている通常のペインは、接続し直しても起動時の権限で動く。`You may need to touch` に続いてすぐ `invalid format` が出た場合は、管理者の **PowerShell** から直接取り込むこともできる。以下は Ubuntu の既定ユーザーで NFC を取り込む例。
+
+```powershell
+wsl.exe -d Ubuntu --exec sh -c 'exec ~/.local/bin/yubikey-ssh setup nfc import'
+```
+
 セットアップ済みの鍵は再利用する。ノートの手順で作った `~/.ssh/id_ed25519_sk_nano` または `~/.ssh/id_ed25519_sk_nfc` と対応する `.pub` もそのまま使える。取り込みは指定した application の候補が 1 件のときだけ行う。
 
 ### 接続先への登録

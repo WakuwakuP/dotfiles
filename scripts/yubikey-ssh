@@ -65,16 +65,20 @@ prepare_profile() {
       read -r mode
       mode=${mode:-import}
     fi
-    printf 'Insert the %s YubiKey. Follow the PIN and touch prompts.\n' "$role" >&2
     case "$mode" in
       create)
+        printf 'Insert the %s YubiKey. Follow the PIN and touch prompts.\n' "$role" >&2
         ssh-keygen -t ed25519-sk -O resident -O "application=ssh:$role" \
           -C "yubikey-$role" -N '' -f "$key"
         ;;
       import)
+        printf 'Insert only the %s YubiKey. Enter its FIDO2 PIN and touch the key if it requests a touch.\n' "$role" >&2
+        if [[ -n ${WSL_DISTRO_NAME:-} && ${SSH_SK_HELPER:-} == *.exe ]]; then
+          printf 'Windows helper: run import from WSL opened in an administrator terminal. Use a pane started there for recovery.\n' >&2
+        fi
         mkdir "$stage/recovered"
         (cd "$stage/recovered" && ssh-keygen -K) ||
-          die "Recovery failed. On WSL with the Windows helper, start Windows Terminal as administrator and retry as your usual Linux user."
+          die "ssh-keygen -K failed. If you have the original handle and public key, place them at $legacy and $legacy.pub and rerun setup."
         for file in "$stage/recovered/id_ed25519_sk_rk_$role" "$stage/recovered/id_ed25519_sk_rk_${role}_"*; do
           [[ -f "$file" && -f "$file.pub" ]] && matches+=("$file")
         done
